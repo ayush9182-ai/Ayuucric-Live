@@ -1,0 +1,6 @@
+{
+  "name": "AyuuCric Live",
+  "description": "Local cricket live match tracking, ball-by-ball commentary, points table, highlights, DRS review simulation, analytics, and tournament leaderboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
