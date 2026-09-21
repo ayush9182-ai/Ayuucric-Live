@@ -35,19 +35,19 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
     val isSpeaking = _isSpeaking.asStateFlow()
 
     private val _currentDialogue = MutableStateFlow(
-        "🎙️ Sidhu Paaji AI (Edge Prabhat Voice): Thoko taali guru! Live match scorecard shuru ho chuka hai!"
+        "🎙️ Sidhu Paaji AI (Microsoft Edge Madhur): Thoko taali guru! Live match scorecard shuru ho chuka hai!"
     )
     val currentDialogue = _currentDialogue.asStateFlow()
 
-    private val _voiceEngineTitle = MutableStateFlow("Microsoft Edge Prabhat Neural (Active)")
+    private val _voiceEngineTitle = MutableStateFlow("Microsoft Edge Madhur Neural (Male Live)")
     val voiceEngineTitle = _voiceEngineTitle.asStateFlow()
 
     private val _voiceStyle = MutableStateFlow(SidhuVoiceStyle.ENERGETIC_JOSH)
     val voiceStyle = _voiceStyle.asStateFlow()
 
     // Interactive Pitch & Speed controls (Persisted)
-    // Edge Prabhat Neural natural base pitch is 1.0f, speed 1.0f
-    private val _currentPitch = MutableStateFlow(prefs.getFloat(KEY_PITCH, 1.0f))
+    // Edge Madhur Neural natural base pitch is 1.0f, speed 1.0f
+    private val _currentPitch = MutableStateFlow(prefs.getFloat(KEY_PITCH, 0.88f))
     val currentPitch = _currentPitch.asStateFlow()
 
     private val _currentSpeed = MutableStateFlow(prefs.getFloat(KEY_SPEED, 1.0f))
@@ -122,24 +122,22 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
                             (it.locale.language.equals("en", ignoreCase = true) && it.locale.country.equals("IN", ignoreCase = true))
                 }
 
-                // Check for Microsoft Prabhat voice priority
-                val prabhatVoice = hindiVoices.firstOrNull { 
-                    it.name.contains("prabhat", ignoreCase = true) 
-                } ?: hindiVoices.firstOrNull { 
-                    it.name.contains("microsoft", ignoreCase = true) && it.name.lowercase().contains("male") 
-                }
-
-                val chosen = prabhatVoice ?: when (targetGender) {
+                // Strictly select male voices and reject female identifiers (-hia, -hie, -hic, female)
+                val chosen = when (targetGender) {
                     "MALE" -> {
                         hindiVoices.firstOrNull { v ->
                             val n = v.name.lowercase()
-                            n.contains("male") || n.contains("-hid") || n.contains("-hia") || n.contains("man") || n.contains("#m")
-                        } ?: hindiVoices.firstOrNull { !it.name.lowercase().contains("female") }
+                            (n.contains("cfc") || n.contains("-hid") || n.contains("cfl") || n.contains("male") || n.contains("man")) &&
+                                    !n.contains("female") && !n.contains("woman") && !n.contains("-hia") && !n.contains("-hie") && !n.contains("-hic")
+                        } ?: hindiVoices.firstOrNull { v ->
+                            val n = v.name.lowercase()
+                            !n.contains("female") && !n.contains("woman") && !n.contains("-hia") && !n.contains("-hie") && !n.contains("-hic") && !n.contains("girl")
+                        }
                     }
                     "FEMALE" -> {
                         hindiVoices.firstOrNull { v ->
                             val n = v.name.lowercase()
-                            n.contains("female") || n.contains("-hie") || n.contains("-hic")
+                            n.contains("female") || n.contains("-hia") || n.contains("-hie") || n.contains("-hic")
                         }
                     }
                     else -> null
@@ -148,6 +146,10 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
                 if (chosen != null) {
                     engine.voice = chosen
                     Log.d("AiSidhuCommentary", "Selected local voice: ${chosen.name}")
+                }
+                // When male is selected, ensure a resonant, masculine baritone pitch
+                if (targetGender == "MALE") {
+                    engine.setPitch(_currentPitch.value.coerceAtMost(0.88f))
                 }
             }
         } catch (e: Exception) {
@@ -176,14 +178,14 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
     }
 
     fun resetToSidhuDefaults() {
-        setCustomPitch(1.0f)
+        setCustomPitch(0.88f)
         setCustomSpeed(1.0f)
         setVoiceGender("MALE")
         testVoiceSample()
     }
 
     fun testVoiceSample() {
-        speak("ओए गुरु! ठोको ताली गुरु! मैं हूँ सिद्धू पाजी, माइक्रोसॉफ्ट एज की प्रभात आवाज़ में! चक दे फट्टे!")
+        speak("ओए गुरु! ठोको ताली गुरु! मैं हूँ सिद्धू पाजी, माइक्रोसॉफ्ट एज की मधुर आवाज़ में! चक दे फट्टे!")
     }
 
     fun setVoiceStyle(style: SidhuVoiceStyle) {
@@ -212,14 +214,23 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
             requestAudioFocus()
             val speechReadyText = HindiSpeechFormatter.formatForHindiTts(text)
 
-            // Primary: Microsoft Edge Prabhat Neural online voice
+            // Primary: Microsoft Edge Madhur Neural (Male Hindi) online voice
+            val edgeVoice = if (_voiceGender.value == "FEMALE") "hi-IN-SwaraNeural" else "hi-IN-MadhurNeural"
+            val (prosodyPitch, prosodyRate) = when (_voiceStyle.value) {
+                SidhuVoiceStyle.SHAYARI_PUNCH -> Pair("-2Hz", "-4%")
+                SidhuVoiceStyle.ENERGETIC_JOSH -> Pair("+2Hz", "+5%")
+                SidhuVoiceStyle.TV_BROADCAST -> Pair("+0Hz", "+0%")
+            }
+
             edgeTtsManager.synthesizeAndPlay(
                 text = speechReadyText,
-                voice = "en-IN-PrabhatNeural",
+                voice = edgeVoice,
+                pitch = prosodyPitch,
+                rate = prosodyRate,
                 onStart = {
                     scope.launch {
                         _isSpeaking.value = true
-                        _voiceEngineTitle.value = "Microsoft Edge Prabhat Neural (Live)"
+                        _voiceEngineTitle.value = "Microsoft Edge Madhur Neural (Male Live)"
                     }
                 },
                 onDone = {
@@ -228,7 +239,7 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
                 onError = { errorMsg ->
                     Log.w("AiSidhuCommentary", "Edge TTS error: $errorMsg. Falling back to local TTS engine.")
                     scope.launch {
-                        _voiceEngineTitle.value = "Local Android TTS (Fallback)"
+                        _voiceEngineTitle.value = "Local Android TTS (Male Fallback)"
                         speakViaLocalTts(speechReadyText, flush)
                     }
                 }
@@ -298,8 +309,8 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
             ballInOver = (1..6).random(),
             runs = randomRuns,
             isWicket = isWicket,
-            batsman = listOf("Rohit", "Virat", "Aryan", "Surya", "Rinku").random(),
-            bowler = listOf("Jasprit", "Shami", "Kuldeep", "Siraj", "Hardik").random(),
+            batsman = "Batter",
+            bowler = "Bowler",
             commentary = ""
         )
         val freshDialogue = SidhuCommentaryGenerator.generateBallCommentary(

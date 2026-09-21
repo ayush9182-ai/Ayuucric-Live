@@ -64,6 +64,8 @@ fun ScoreBanner(
     onSwitchStriker: () -> Unit,
     onOpenSquad: (() -> Unit)? = null,
     onOpenUpdateApp: (() -> Unit)? = null,
+    onChangeBowler: (() -> Unit)? = null,
+    onChangeBatsman: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -291,27 +293,42 @@ fun ScoreBanner(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "BATSMEN",
+                            text = "BATTERS",
                             fontSize = 10.sp,
                             color = TextMuted,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
-                        if (onOpenSquad != null) {
-                            Box(
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            OutlinedButton(
+                                onClick = onSwitchStriker,
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(CricketGreen.copy(alpha = 0.15f))
-                                    .border(0.5.dp, CricketGreen.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
-                                    .clickable { onOpenSquad() }
-                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                                    .height(22.dp)
+                                    .testTag("switch_striker_btn"),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 5.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(0.6.dp, CricketGreen.copy(alpha = 0.6f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CricketGreen)
                             ) {
-                                Text(
-                                    text = "👥 Squad",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = CricketGreen
+                                Icon(
+                                    imageVector = Icons.Default.SwapHoriz,
+                                    contentDescription = "Rotate Strike",
+                                    modifier = Modifier.size(11.dp)
                                 )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text("Swap", fontSize = 8.5.sp)
+                            }
+                            if (onChangeBatsman != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(CricketGreen.copy(alpha = 0.15f))
+                                        .border(0.5.dp, CricketGreen.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                        .clickable { onChangeBatsman() }
+                                        .padding(horizontal = 5.dp, vertical = 3.dp)
+                                ) {
+                                    Text("✏️ Edit", fontSize = 8.5.sp, color = CricketGreen, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -319,7 +336,9 @@ fun ScoreBanner(
 
                     // Striker
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = onChangeBatsman != null) { onChangeBatsman?.invoke() },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -351,7 +370,9 @@ fun ScoreBanner(
 
                     // Non-Striker
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = onChangeBatsman != null) { onChangeBatsman?.invoke() },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Spacer(modifier = Modifier.width(10.dp))
@@ -375,7 +396,11 @@ fun ScoreBanner(
                 Spacer(modifier = Modifier.width(10.dp))
 
                 // Bowler
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(enabled = onChangeBowler != null) { onChangeBowler?.invoke() }
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -389,22 +414,16 @@ fun ScoreBanner(
                             letterSpacing = 1.sp
                         )
                         OutlinedButton(
-                            onClick = onSwitchStriker,
+                            onClick = { onChangeBowler?.invoke() },
                             modifier = Modifier
                                 .height(22.dp)
-                                .testTag("switch_striker_btn"),
+                                .testTag("change_bowler_btn"),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            border = androidx.compose.foundation.BorderStroke(0.6.dp, HawkEyeCyan.copy(alpha = 0.6f)),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = HawkEyeCyan)
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(0.6.dp, StadiumGold.copy(alpha = 0.6f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = StadiumGold)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.SwapHoriz,
-                                contentDescription = "Rotate Strike",
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text("Swap", fontSize = 9.sp)
+                            Text("🎳 Change", fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -412,7 +431,7 @@ fun ScoreBanner(
                         text = match.bowlerName,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
+                        color = StadiumGold,
                         maxLines = 1
                     )
                     val bOvers = match.bowlerBalls / 6

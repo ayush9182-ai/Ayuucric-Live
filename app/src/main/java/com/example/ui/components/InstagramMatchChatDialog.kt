@@ -147,7 +147,7 @@ fun InstagramMatchChatDialog(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "• 1,280 Spectators Active",
+                                    text = "Real-time Match Chat",
                                     color = Color.White.copy(alpha = 0.85f),
                                     fontSize = 11.sp
                                 )
@@ -168,14 +168,42 @@ fun InstagramMatchChatDialog(
                 }
 
                 // Chat Messages Feed
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                if (messages.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Text("💬", fontSize = 32.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "No messages yet",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Live match chat ke liye neeche se message bhejein",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                     items(messages, key = { it.id }) { msg ->
                         val timeStr = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(msg.timestamp))
                         if (msg.isFromMe) {
@@ -291,6 +319,7 @@ fun InstagramMatchChatDialog(
                         }
                     }
                 }
+            }
 
                 // Quick Reactions Row (Instagram style emojis)
                 Row(

@@ -64,6 +64,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -127,12 +128,18 @@ import com.example.ui.components.RoleAuthorizationDialog
 import com.example.ui.components.RoleRequestsDialog
 import com.example.ui.components.ScoreBanner
 import com.example.ui.components.ScorerControllerSheet
+import com.example.ui.components.ChangeBowlerDialog
+import com.example.ui.components.NewBatsmanDialog
+import com.example.ui.components.ChangeBatsmanDialog
 import com.example.ui.components.SidhuAiCommentaryBar
 import com.example.ui.components.StandingsAndLeaderboardScreen
 import com.example.ui.components.TopBroadcastHeader
 import com.example.ui.components.TournamentAnalyticsScreen
 import com.example.ui.components.UmpireCameraScreen
 import com.example.ui.components.ZeroDelayLiveRadar
+import com.example.ui.components.WhatsAppMatchShareDialog
+import com.example.ui.components.WagonWheelAndPitchMapDialog
+import com.example.ui.components.BroadcastGraphicOverlay
 import com.example.ui.theme.CricketGreen
 import com.example.ui.theme.CricTrackTheme
 import com.example.ui.theme.DrsOutRed
@@ -236,11 +243,26 @@ fun CricketAppContent(viewModel: CricketViewModel) {
     val viewingPlayerCard by viewModel.viewingPlayerCard.collectAsStateWithLifecycle()
     val showMessagesHub by viewModel.showMessagesHub.collectAsStateWithLifecycle()
     val messagesHubTab by viewModel.messagesHubTab.collectAsStateWithLifecycle()
+    val showWhatsAppShareDialog by viewModel.showWhatsAppShareDialog.collectAsStateWithLifecycle()
+    val showWagonWheelDialog by viewModel.showWagonWheelDialog.collectAsStateWithLifecycle()
+    val activeBroadcastOverlay by viewModel.activeBroadcastOverlay.collectAsStateWithLifecycle()
+    val showChangeBowlerDialog by viewModel.showChangeBowlerDialog.collectAsStateWithLifecycle()
+    val showNewBatsmanDialog by viewModel.showNewBatsmanDialog.collectAsStateWithLifecycle()
+    val pendingWicketType by viewModel.pendingWicketType.collectAsStateWithLifecycle()
+    val showChangeBatsmanDialog by viewModel.showChangeBatsmanDialog.collectAsStateWithLifecycle()
     var showMatchSwitcherModal by remember { mutableStateOf(false) }
     var showGuideDialog by remember { mutableStateOf(false) }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
+    if (showLoginScreen) {
+        CricHeroesLoginScreen(
+            currentProfile = userProfile,
+            onLoginSuccess = { viewModel.performLogin(it) },
+            onContinueAsSpectator = { viewModel.setShowLoginScreen(false) },
+            onCheckUsernameAvailable = { viewModel.isUsernameAvailable(it) }
+        )
+    } else {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
         containerColor = PitchDark,
         topBar = {
             TopBroadcastHeader(
@@ -253,7 +275,9 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                 onOpenMessagesHub = { viewModel.openMessagesHub(0) },
                 onOpenRoleDialog = { viewModel.setShowRoleDialog(true) },
                 onOpenProfileDialog = { viewModel.setShowProfileDialog(true) },
-                onOpenMatchSwitcher = { showMatchSwitcherModal = true }
+                onOpenMatchSwitcher = { showMatchSwitcherModal = true },
+                onShareWhatsApp = { viewModel.setShowWhatsAppShareDialog(true) },
+                onOpenWagonWheel = { viewModel.setShowWagonWheelDialog(true) }
             )
         },
         bottomBar = {
@@ -262,6 +286,30 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                 currentRole = currentRole,
                 onSelectTab = { viewModel.selectTab(it) }
             )
+        },
+        floatingActionButton = {
+            if (currentTab == AppScreenTab.MATCHES_FEED) {
+                ExtendedFloatingActionButton(
+                    onClick = { viewModel.setShowCreateMatchDialog(true) },
+                    containerColor = StadiumGold,
+                    contentColor = PitchDark,
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Create Match",
+                            tint = PitchDark
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "New Match",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            color = PitchDark
+                        )
+                    }
+                )
+            }
         }
     ) { innerPadding ->
         Box(
@@ -345,7 +393,10 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                         onTriggerAppeal = { appealType ->
                             viewModel.selectTab(AppScreenTab.DRS_SYSTEM)
                             viewModel.startDrsReview(appealType, currentMatch?.strikerName ?: "Batter", currentMatch?.bowlerName ?: "Bowler")
-                        }
+                        },
+                        onChangeBowler = { viewModel.openChangeBowlerDialog() },
+                        onChangeBatsman = { viewModel.openChangeBatsmanDialog() },
+                        onOpenNewBatsmanDialog = { viewModel.openNewBatsmanDialog("Bowled") }
                     )
                 }
 
@@ -374,8 +425,8 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                         onStartReview = { appealType ->
                             viewModel.startDrsReview(
                                 appealType = appealType,
-                                batsman = currentMatch?.strikerName ?: "Rohit Verma",
-                                bowler = currentMatch?.bowlerName ?: "Jasprit Singh",
+                                batsman = currentMatch?.strikerName?.ifBlank { "Batter" } ?: "Batter",
+                                bowler = currentMatch?.bowlerName?.ifBlank { "Bowler" } ?: "Bowler",
                                 onFieldDecision = if (appealType == "LBW") "NOT OUT" else "OUT"
                             )
                         },
@@ -524,7 +575,50 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     currentRole = currentRole,
                     onOpenRoleDialog = { viewModel.setShowRoleDialog(true) },
                     strikerName = currentMatch?.strikerName ?: "Striker",
-                    bowlerName = currentMatch?.bowlerName ?: "Bowler"
+                    bowlerName = currentMatch?.bowlerName ?: "Bowler",
+                    onChangeBowler = { viewModel.openChangeBowlerDialog() },
+                    onChangeBatsman = { viewModel.openChangeBatsmanDialog() },
+                    onOpenNewBatsmanDialog = { wType -> viewModel.openNewBatsmanDialog(wType) }
+                )
+            }
+
+            // Change Bowler Dialog
+            if (showChangeBowlerDialog && currentMatch != null) {
+                ChangeBowlerDialog(
+                    match = currentMatch!!,
+                    recentDeliveries = currentBallEvents,
+                    onDismiss = { viewModel.closeChangeBowlerDialog() },
+                    onConfirmNewBowler = { newBowler ->
+                        viewModel.changeBowler(newBowler)
+                    }
+                )
+            }
+
+            // New Batsman / Wicket Fall Dialog
+            if (showNewBatsmanDialog && currentMatch != null) {
+                NewBatsmanDialog(
+                    match = currentMatch!!,
+                    initialWicketType = pendingWicketType,
+                    onDismiss = { viewModel.closeNewBatsmanDialog() },
+                    onConfirmDismissalAndNewBatsman = { dismissed, newBatsman, wType, onStrike ->
+                        viewModel.recordWicketWithNewBatsman(
+                            dismissedBatsman = dismissed,
+                            newBatsmanName = newBatsman,
+                            wicketType = wType,
+                            newBatsmanOnStrike = onStrike
+                        )
+                    }
+                )
+            }
+
+            // Change Batsman Dialog
+            if (showChangeBatsmanDialog && currentMatch != null) {
+                ChangeBatsmanDialog(
+                    match = currentMatch!!,
+                    onDismiss = { viewModel.closeChangeBatsmanDialog() },
+                    onConfirmChange = { isStriker, newName ->
+                        viewModel.changeBatsman(isStriker, newName)
+                    }
                 )
             }
 
@@ -564,7 +658,8 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     initialProfile = userProfile,
                     onDismiss = { viewModel.setShowProfileDialog(false) },
                     onSaveProfile = { viewModel.saveUserProfile(it) },
-                    onCheckUsernameAvailable = { viewModel.isUsernameAvailable(it) }
+                    onCheckUsernameAvailable = { viewModel.isUsernameAvailable(it) },
+                    onLogout = { viewModel.logout() }
                 )
             }
 
@@ -584,6 +679,7 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     onSelectRecipient = { viewModel.openDirectMessageWith(it) },
                     onCloseDirectChat = { viewModel.closeDirectMessageChat() },
                     onSendDirectMessage = { recipient, text -> viewModel.sendDirectMessage(recipient, text) },
+                    onRefreshUsers = { viewModel.syncCloudUsers() },
                     onDismiss = {
                         viewModel.closeMessagesHub()
                         viewModel.setShowChatDialog(false)
@@ -607,16 +703,6 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     onOpenLogin = { viewModel.setShowLoginScreen(true) },
                     onOpenAiSettings = { viewModel.setShowAiSettingsDialog(true) },
                     onDismiss = { showMatchSwitcherModal = false }
-                )
-            }
-
-            // World-Class CricHeroes Login Screen
-            if (showLoginScreen) {
-                CricHeroesLoginScreen(
-                    currentProfile = userProfile,
-                    onLoginSuccess = { viewModel.performLogin(it) },
-                    onContinueAsSpectator = { viewModel.setShowLoginScreen(false) },
-                    onCheckUsernameAvailable = { viewModel.isUsernameAvailable(it) }
                 )
             }
 
@@ -796,8 +882,41 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                 alert = drsBroadcast,
                 onDismiss = { viewModel.dismissDrsBroadcast() }
             )
+
+            // WhatsApp Match Summary Card & Poster Dialog
+            if (showWhatsAppShareDialog && currentMatch != null) {
+                WhatsAppMatchShareDialog(
+                    match = currentMatch!!,
+                    onDismiss = { viewModel.setShowWhatsAppShareDialog(false) }
+                )
+            }
+
+            // Wagon Wheel & Ball Pitch Map Visualizer Dialog
+            if (showWagonWheelDialog && currentMatch != null) {
+                WagonWheelAndPitchMapDialog(
+                    match = currentMatch!!,
+                    deliveries = currentBallEvents,
+                    onDismiss = { viewModel.setShowWagonWheelDialog(false) }
+                )
+            }
+
+            // Hotstar-Style Live Broadcast Graphic Overlay (TV Lower-Thirds)
+            if (activeBroadcastOverlay != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 72.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    BroadcastGraphicOverlay(
+                        event = activeBroadcastOverlay!!,
+                        onDismiss = { viewModel.dismissBroadcastOverlay() }
+                    )
+                }
+            }
         }
     }
+}
 }
 
 
@@ -825,7 +944,7 @@ fun BottomBroadcastNavigation(
                     contentDescription = "Matches Dashboard"
                 )
             },
-            label = { Text("Matches", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+            label = { Text("Matches", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = PitchDark,
                 selectedTextColor = CricketGreen,
@@ -844,7 +963,7 @@ fun BottomBroadcastNavigation(
                     contentDescription = "Watch Live Match"
                 )
             },
-            label = { Text("Watch Live", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+            label = { Text("Live", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = PitchDark,
                 selectedTextColor = DrsOutRed,
@@ -863,7 +982,7 @@ fun BottomBroadcastNavigation(
                     contentDescription = "Umpire Camera"
                 )
             },
-            label = { Text("Camera", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+            label = { Text("Camera", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = PitchDark,
                 selectedTextColor = CricketGreen,
@@ -882,7 +1001,7 @@ fun BottomBroadcastNavigation(
                     contentDescription = "DRS Review"
                 )
             },
-            label = { Text("DRS", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+            label = { Text("DRS", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = PitchDark,
                 selectedTextColor = HawkEyeCyan,
@@ -901,7 +1020,7 @@ fun BottomBroadcastNavigation(
                     contentDescription = "Points Table & Leaderboard"
                 )
             },
-            label = { Text("Table", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+            label = { Text("Table", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = PitchDark,
                 selectedTextColor = StadiumGold,
@@ -920,7 +1039,7 @@ fun BottomBroadcastNavigation(
                     contentDescription = "Analytics"
                 )
             },
-            label = { Text("Stats", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+            label = { Text("Stats", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = PitchDark,
                 selectedTextColor = Color(0xFFA78BFA),

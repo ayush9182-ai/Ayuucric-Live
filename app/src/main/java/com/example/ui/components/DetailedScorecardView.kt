@@ -112,18 +112,6 @@ fun DetailedScorecardView(
                     isNotOut = true
                 )
 
-                // Sample Dismissed Batsman
-                BatterScorecardRow(
-                    name = "Sameer Ali",
-                    dismissal = "c Rohit b Jasprit Singh",
-                    runs = 16,
-                    balls = 12,
-                    fours = 2,
-                    sixes = 0,
-                    sr = "133.3",
-                    isNotOut = false
-                )
-
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Extras & Total
@@ -196,17 +184,6 @@ fun DetailedScorecardView(
                     wickets = match.bowlerWickets,
                     economy = econ,
                     isCurrent = true
-                )
-
-                // Bowler 2
-                BowlerScorecardRow(
-                    name = "Mohit Chawla",
-                    overs = "1.0",
-                    maidens = 0,
-                    runs = 14,
-                    wickets = 0,
-                    economy = "14.00",
-                    isCurrent = false
                 )
             }
         }

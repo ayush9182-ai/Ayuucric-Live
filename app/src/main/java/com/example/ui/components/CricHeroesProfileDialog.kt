@@ -69,7 +69,8 @@ fun CricHeroesProfileDialog(
     initialProfile: CricHeroesProfile,
     onDismiss: () -> Unit,
     onSaveProfile: (CricHeroesProfile) -> Unit,
-    onCheckUsernameAvailable: (String) -> Boolean = { true }
+    onCheckUsernameAvailable: (String) -> Boolean = { true },
+    onLogout: () -> Unit = {}
 ) {
     var username by remember { mutableStateOf(initialProfile.username.ifBlank { "ayush_7" }) }
     var usernameError by remember { mutableStateOf<String?>(null) }
@@ -581,15 +582,34 @@ fun CricHeroesProfileDialog(
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Continue as Guest Spectator",
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
+                TextButton(
+                    onClick = {
+                        onDismiss()
+                        onLogout()
+                    }
+                ) {
+                    Text(
+                        text = "🚪 Logout / Switch",
+                        color = Color(0xFFEF4444),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                TextButton(
+                    onClick = onDismiss
+                ) {
+                    Text(
+                        text = "Close",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
     )

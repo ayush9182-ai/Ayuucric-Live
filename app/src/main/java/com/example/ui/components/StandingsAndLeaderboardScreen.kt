@@ -256,13 +256,13 @@ fun PointsTableTab(standings: List<TeamStandingEntity>) {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "Points Table Cleared",
+                            text = "No records yet",
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
                         Text(
-                            text = "Purane records saaf hain. Naye matches khelein aur point table yahan live banta jayega!",
+                            text = "Matches khele jaane par yahan points table live banta jayega.",
                             color = TextMuted,
                             fontSize = 11.sp,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -404,13 +404,13 @@ fun FanLeaderboardTab(playerStats: List<PlayerStatEntity>) {
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "Leaderboard Records Cleared",
+                            text = "No records yet",
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
                         Text(
-                            text = "Saare demo player records hata diye gaye hain. Real live match khelte waqt players ke runs, wickets aur fantasy points yahan auto-calculate honge!",
+                            text = "Live matches khelne par players ke runs, wickets aur points yahan update honge.",
                             color = TextMuted,
                             fontSize = 11.sp,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,

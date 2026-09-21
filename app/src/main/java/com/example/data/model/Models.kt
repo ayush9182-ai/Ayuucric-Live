@@ -20,28 +20,28 @@ data class MatchEntity(
     val wickets: Int,
     val legalBalls: Int, // e.g. 84 = 14.0 overs (84 / 6 + (84 % 6) / 10f)
     val totalOvers: Int = 20,
-    val target: Int = 178,
+    val target: Int = 0,
     val status: String = "LIVE", // "LIVE", "FINISHED", "UPCOMING"
-    val statusDetail: String = "Need 24 runs in 16 balls",
-    val strikerName: String = "Rohit Verma",
-    val strikerRuns: Int = 54,
-    val strikerBalls: Int = 31,
-    val strikerFours: Int = 5,
-    val strikerSixes: Int = 3,
-    val nonStrikerName: String = "Aryan Khan",
-    val nonStrikerRuns: Int = 28,
-    val nonStrikerBalls: Int = 19,
-    val nonStrikerFours: Int = 2,
-    val nonStrikerSixes: Int = 1,
-    val bowlerName: String = "Jasprit Singh",
-    val bowlerBalls: Int = 20, // 3.2 overs
+    val statusDetail: String = "",
+    val strikerName: String = "Striker",
+    val strikerRuns: Int = 0,
+    val strikerBalls: Int = 0,
+    val strikerFours: Int = 0,
+    val strikerSixes: Int = 0,
+    val nonStrikerName: String = "Non-Striker",
+    val nonStrikerRuns: Int = 0,
+    val nonStrikerBalls: Int = 0,
+    val nonStrikerFours: Int = 0,
+    val nonStrikerSixes: Int = 0,
+    val bowlerName: String = "Bowler",
+    val bowlerBalls: Int = 0,
     val bowlerMaidens: Int = 0,
-    val bowlerRuns: Int = 26,
-    val bowlerWickets: Int = 2,
-    val venue: String = "Central Ground, Turf 1",
-    val teamAFirstInningsScore: String = "177/6 (20.0)",
-    val teamAPlayers: String = "Rohit Verma, Aryan Khan, Vikas Rana, Suresh Raina, Hardik P, Ravindra J, Rishabh P, MS Dhoni, Shami M, Bumrah J, Siraj M",
-    val teamBPlayers: String = "Jasprit Singh, Mohit Chawla, Zahid Khan, Virat K, Shubman G, KL Rahul, Surya K, Ishan K, Kuldeep Y, Arshdeep S, Chahal Y"
+    val bowlerRuns: Int = 0,
+    val bowlerWickets: Int = 0,
+    val venue: String = "",
+    val teamAFirstInningsScore: String = "",
+    val teamAPlayers: String = "",
+    val teamBPlayers: String = ""
 )
 
 @Entity(tableName = "ball_events")
@@ -175,8 +175,8 @@ data class DrsBroadcastAlert(
 
 data class DrsReviewState(
     val appealType: String = "LBW", // "LBW", "RUN_OUT", "STUMPED", "CAUGHT_BEHIND"
-    val batsman: String = "Rohit Verma",
-    val bowler: String = "Jasprit Singh",
+    val batsman: String = "Batsman",
+    val bowler: String = "Bowler",
     val onFieldDecision: String = "NOT OUT", // "OUT" or "NOT OUT"
     val reviewBy: String = "Bowling Team",
     val isFrontFootNoBall: Boolean = false,
@@ -255,5 +255,24 @@ data class DirectPersonalMessage(
     val isRead: Boolean = false,
     val reactionEmoji: String? = null
 )
+
+// Hotstar-Style Live Broadcast Graphic Overlays (TV Lower-Thirds)
+data class BroadcastOverlayEvent(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val type: OverlayType,
+    val headline: String,
+    val subheadline: String,
+    val statDetail: String = "",
+    val accentColorHex: Long = 0xFFFFD700
+) {
+    enum class OverlayType {
+        MILESTONE_50,
+        MILESTONE_100,
+        MAXIMUM_SIX,
+        BOUNDARY_FOUR,
+        WICKET_DISMISSAL,
+        PARTNERSHIP_RECORD
+    }
+}
 
 

@@ -63,7 +63,9 @@ class EdgeTtsManager(private val context: Context) {
 
     fun synthesizeAndPlay(
         text: String,
-        voice: String = "en-IN-PrabhatNeural",
+        voice: String = "hi-IN-MadhurNeural",
+        pitch: String = "+0Hz",
+        rate: String = "+0%",
         onStart: () -> Unit,
         onDone: () -> Unit,
         onError: (String) -> Unit
@@ -102,9 +104,9 @@ class EdgeTtsManager(private val context: Context) {
                 .addHeader("Accept-Language", "en-US,en;q=0.9,hi;q=0.8")
                 .build()
 
-            // Safety timeout: if Edge TTS doesn't deliver audio within 4 seconds, fallback
+            // Safety timeout: if Edge TTS doesn't deliver audio within 7 seconds, fallback
             val timeoutJob = launch {
-                delay(4500)
+                delay(7000)
                 if (!hasReceivedAudio && !isSynthesisComplete) {
                     Log.w("EdgeTtsManager", "Edge TTS timeout, falling back to local TTS")
                     activeWebSocket?.cancel()
@@ -121,11 +123,11 @@ class EdgeTtsManager(private val context: Context) {
                             "{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":{\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"false\"},\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}"
                     webSocket.send(configMsg)
 
-                    // Send SSML with Microsoft Edge Prabhat Neural voice
+                    // Send SSML with Microsoft Edge Neural voice (e.g. hi-IN-MadhurNeural)
                     val lang = if (voice.startsWith("hi-")) "hi-IN" else "en-IN"
                     val ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='$lang'>" +
                             "<voice name='$voice'>" +
-                            "<prosody pitch='+0Hz' rate='+0%'>$escapedText</prosody>" +
+                            "<prosody pitch='$pitch' rate='$rate'>$escapedText</prosody>" +
                             "</voice></speak>"
                     val ssmlMsg = "X-RequestId:$requestId\r\nContent-Type:application/ssml+xml\r\nPath:ssml\r\n\r\n$ssml"
                     webSocket.send(ssmlMsg)

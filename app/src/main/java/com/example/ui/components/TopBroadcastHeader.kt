@@ -44,7 +44,9 @@ fun TopBroadcastHeader(
     onOpenMessagesHub: () -> Unit,
     onOpenRoleDialog: () -> Unit,
     onOpenProfileDialog: () -> Unit,
-    onOpenMatchSwitcher: () -> Unit
+    onOpenMatchSwitcher: () -> Unit,
+    onShareWhatsApp: () -> Unit = {},
+    onOpenWagonWheel: () -> Unit = {}
 ) {
     Surface(
         color = PitchSurface,
@@ -255,19 +257,63 @@ fun TopBroadcastHeader(
                         )
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Switch",
-                            fontSize = 10.sp,
-                            color = TextSecondary,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Switch Match",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // Quick 1-Tap WhatsApp Share Poster
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF25D366).copy(alpha = 0.2f))
+                                .border(0.8.dp, Color(0xFF25D366), CircleShape)
+                                .clickable { onShareWhatsApp() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Share WhatsApp",
+                                tint = Color(0xFF25D366),
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+
+                        // Quick 1-Tap Wagon Wheel Radar
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(HawkEyeCyan.copy(alpha = 0.2f))
+                                .border(0.8.dp, HawkEyeCyan, CircleShape)
+                                .clickable { onOpenWagonWheel() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.TrackChanges,
+                                contentDescription = "Wagon Wheel Radar",
+                                tint = HawkEyeCyan,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { onOpenMatchSwitcher() }
+                        ) {
+                            Text(
+                                text = "Switch",
+                                fontSize = 10.sp,
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Switch Match",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }

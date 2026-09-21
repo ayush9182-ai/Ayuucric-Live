@@ -176,6 +176,12 @@ fun TournamentAnalyticsScreen(
 
 @Composable
 fun WagonWheelSection(ballEvents: List<BallEventEntity>) {
+    val totalRuns = ballEvents.sumOf { it.runs }
+    val offRuns = ballEvents.filter { it.shotAngle in 0f..180f }.sumOf { it.runs }
+    val legRuns = ballEvents.filter { it.shotAngle > 180f }.sumOf { it.runs }
+    val offPct = if (totalRuns > 0) (offRuns * 100) / totalRuns else 0
+    val legPct = if (totalRuns > 0) (legRuns * 100) / totalRuns else 0
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -199,10 +205,10 @@ fun WagonWheelSection(ballEvents: List<BallEventEntity>) {
                 )
 
                 Text(
-                    text = "Rohit Verma (58 runs)",
+                    text = if (ballEvents.isNotEmpty()) "$totalRuns runs (${ballEvents.size} balls)" else "No records yet",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = CricketGreen
+                    color = if (ballEvents.isNotEmpty()) CricketGreen else TextMuted
                 )
             }
 
@@ -219,6 +225,33 @@ fun WagonWheelSection(ballEvents: List<BallEventEntity>) {
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawWagonWheel(ballEvents)
+                }
+
+                if (ballEvents.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = "No records yet",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Abhi tak koi shot nahi khela gaya hai",
+                                color = Color.White.copy(alpha = 0.65f),
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
                 }
             }
 
@@ -238,38 +271,49 @@ fun WagonWheelSection(ballEvents: List<BallEventEntity>) {
             Spacer(modifier = Modifier.height(12.dp))
 
             // Off Side vs Leg Side Distribution
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF1E293B))
-                        .padding(10.dp)
+            if (ballEvents.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
-                        Text("OFF SIDE", fontSize = 10.sp, color = TextMuted, fontWeight = FontWeight.Bold)
-                        Text("34 Runs (58%)", fontSize = 13.sp, fontWeight = FontWeight.Black, color = HawkEyeCyan)
-                        Text("Cover & Point dominance", fontSize = 9.sp, color = TextSecondary)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF1E293B))
+                            .padding(10.dp)
+                    ) {
+                        Column {
+                            Text("OFF SIDE", fontSize = 10.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            Text("$offRuns Runs ($offPct%)", fontSize = 13.sp, fontWeight = FontWeight.Black, color = HawkEyeCyan)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF1E293B))
+                            .padding(10.dp)
+                    ) {
+                        Column {
+                            Text("LEG SIDE", fontSize = 10.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            Text("$legRuns Runs ($legPct%)", fontSize = 13.sp, fontWeight = FontWeight.Black, color = CricketGreen)
+                        }
                     }
                 }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
+            } else {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(0xFF1E293B))
-                        .padding(10.dp)
+                        .padding(10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column {
-                        Text("LEG SIDE", fontSize = 10.sp, color = TextMuted, fontWeight = FontWeight.Bold)
-                        Text("24 Runs (42%)", fontSize = 13.sp, fontWeight = FontWeight.Black, color = CricketGreen)
-                        Text("Mid-wicket pull shots", fontSize = 9.sp, color = TextSecondary)
-                    }
+                    Text("No records yet (0 runs)", fontSize = 11.sp, color = TextMuted)
                 }
             }
         }
@@ -373,60 +417,84 @@ fun ManhattanAndWormSection() {
 
 @Composable
 fun TournamentLeadersSection(playerStats: List<PlayerStatEntity>) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Orange Cap (Top Run Getter)
-        val orangeCap = playerStats.firstOrNull { it.isOrangeCap } ?: playerStats.firstOrNull()
-        if (orangeCap != null) {
-            LeaderCapCard(
-                title = "ORANGE CAP (MOST RUNS)",
-                player = orangeCap,
-                capColor = StadiumGold,
-                statLabel = "${orangeCap.runs} Runs",
-                subLabel = "Avg 54.0 • SR ${orangeCap.strikeRate} • HS ${orangeCap.highestScore}"
-            )
-        }
-
-        // Purple Cap (Top Wicket Taker)
-        val purpleCap = playerStats.firstOrNull { it.isPurpleCap } ?: playerStats.getOrNull(1)
-        if (purpleCap != null) {
-            LeaderCapCard(
-                title = "PURPLE CAP (MOST WICKETS)",
-                player = purpleCap,
-                capColor = Color(0xFFA855F7),
-                statLabel = "${purpleCap.wickets} Wickets",
-                subLabel = "Econ ${purpleCap.economy} • Best 4/18 • 6 Matches"
-            )
-        }
-
-        // Most Sixes & Strike Rate Leaders
+    if (playerStats.isEmpty()) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = PitchCard)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("No records yet", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(
-                    text = "MOST SIXES IN TOURNAMENT",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    "Matches khele jaane par Orange Cap, Purple Cap aur Most Sixes yahan automatic update honge.",
                     color = TextMuted,
-                    letterSpacing = 1.sp
+                    fontSize = 11.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+            }
+        }
+        return
+    }
 
-                listOf(
-                    Pair("Rohit Verma (Royal Strikers)", "18 Sixes"),
-                    Pair("Aryan Khan (Royal Strikers)", "12 Sixes"),
-                    Pair("Kabir Patel (Township Warriors)", "11 Sixes")
-                ).forEachIndexed { index, (name, sixes) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(text = "${index + 1}. $name", fontSize = 12.sp, color = TextPrimary)
-                        Text(text = sixes, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = StadiumGold)
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Orange Cap (Top Run Getter)
+        val orangeCap = playerStats.maxByOrNull { it.runs }
+        if (orangeCap != null && orangeCap.runs > 0) {
+            LeaderCapCard(
+                title = "ORANGE CAP (MOST RUNS)",
+                player = orangeCap,
+                capColor = StadiumGold,
+                statLabel = "${orangeCap.runs} Runs",
+                subLabel = "SR ${orangeCap.strikeRate} • HS ${orangeCap.highestScore}"
+            )
+        }
+
+        // Purple Cap (Top Wicket Taker)
+        val purpleCap = playerStats.maxByOrNull { it.wickets }
+        if (purpleCap != null && purpleCap.wickets > 0) {
+            LeaderCapCard(
+                title = "PURPLE CAP (MOST WICKETS)",
+                player = purpleCap,
+                capColor = Color(0xFFA855F7),
+                statLabel = "${purpleCap.wickets} Wickets",
+                subLabel = "Econ ${purpleCap.economy}"
+            )
+        }
+
+        // Highest Individual Scores
+        val topScorers = playerStats.filter { it.highestScore > 0 }.sortedByDescending { it.highestScore }.take(5)
+        if (topScorers.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = PitchCard)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = "HIGHEST INDIVIDUAL SCORES",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMuted,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    topScorers.forEachIndexed { index, player ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = "${index + 1}. ${player.name} (${player.team})", fontSize = 12.sp, color = TextPrimary)
+                            Text(text = "${player.highestScore} Runs", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = StadiumGold)
+                        }
                     }
                 }
             }
@@ -552,36 +620,24 @@ private fun DrawScope.drawWagonWheel(ballEvents: List<BallEventEntity>) {
         size = Size(8.dp.toPx(), 28.dp.toPx())
     )
 
-    // Default shots for Rohit Verma Wagon wheel
-    val shots = listOf(
-        Pair(15f, 6), // Long on 6
-        Pair(35f, 4), // Extra cover 4
-        Pair(50f, 4), // Cover 4
-        Pair(65f, 1), // Point 1
-        Pair(80f, 4), // Backward point 4
-        Pair(120f, 2), // Third man 2
-        Pair(195f, 2), // Mid-wicket 2
-        Pair(210f, 6), // Deep mid-wicket 6
-        Pair(230f, 6), // Square leg 6
-        Pair(260f, 4), // Fine leg 4
-        Pair(300f, 1), // Long-off 1
-        Pair(340f, 2) // Straight 2
-    )
-
-    shots.forEach { (deg, runs) ->
+    // Plot real shots from ballEvents
+    val validShots = ballEvents.filter { it.runs > 0 }
+    validShots.forEach { ball ->
+        val deg = ball.shotAngle
         val rad = Math.toRadians((deg - 90).toDouble())
-        val distRatio = when (runs) {
+        val distRatio = when (ball.runs) {
             6 -> 1.0f
             4 -> 0.92f
-            2 -> 0.65f
+            2, 3 -> 0.65f
             else -> 0.45f
         }
         val endX = cx + (radius * distRatio * cos(rad)).toFloat()
         val endY = cy + (radius * distRatio * sin(rad)).toFloat()
 
-        val shotColor = when (runs) {
-            6 -> StadiumGold
-            4 -> CricketGreen
+        val shotColor = when {
+            ball.runs >= 6 -> StadiumGold
+            ball.runs >= 4 -> CricketGreen
+            ball.isWicket -> DrsOutRed
             else -> Color.White.copy(alpha = 0.8f)
         }
 
@@ -589,11 +645,11 @@ private fun DrawScope.drawWagonWheel(ballEvents: List<BallEventEntity>) {
             color = shotColor,
             start = Offset(cx, cy),
             end = Offset(endX, endY),
-            strokeWidth = if (runs >= 4) 2.5.dp.toPx() else 1.5.dp.toPx()
+            strokeWidth = if (ball.runs >= 4) 2.5.dp.toPx() else 1.5.dp.toPx()
         )
         drawCircle(
             color = shotColor,
-            radius = if (runs >= 4) 3.5.dp.toPx() else 2.dp.toPx(),
+            radius = if (ball.runs >= 4) 3.5.dp.toPx() else 2.dp.toPx(),
             center = Offset(endX, endY)
         )
     }

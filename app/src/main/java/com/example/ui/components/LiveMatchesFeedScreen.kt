@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -125,15 +127,19 @@ fun LiveMatchesFeedScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B))
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
+                    // Title Header
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(38.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(
                                         Brush.linearGradient(
@@ -146,11 +152,11 @@ fun LiveMatchesFeedScreen(
                                     imageVector = Icons.Default.SportsCricket,
                                     contentDescription = null,
                                     tint = PitchDark,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
 
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
 
                             Column {
                                 Text(
@@ -160,46 +166,68 @@ fun LiveMatchesFeedScreen(
                                     fontWeight = FontWeight.Black
                                 )
                                 Text(
-                                    text = "Online Cloud Sync • Slow Net • Offline Ground",
+                                    text = "Real-time Ground Scoring • Cloud Sync",
                                     color = CricketGreen,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
 
-                        // Create / Add Match
+                        // Live badge or count
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(StadiumGold.copy(alpha = 0.15f))
-                                .border(1.dp, StadiumGold.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                .clickable { onCreateNewMatch() }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(CricketGreen.copy(alpha = 0.15f))
+                                .border(1.dp, CricketGreen.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    tint = StadiumGold,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "New Match",
-                                    color = StadiumGold,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Text(
+                                text = "${matches.size} Total",
+                                color = CricketGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Prominent Start New Match Button
+                    Button(
+                        onClick = { onCreateNewMatch() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = StadiumGold,
+                            contentColor = PitchDark
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Create New Match",
+                            tint = PitchDark,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "START NEW MATCH",
+                            color = PitchDark,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Filter Chips (Live Now, All Matches, Completed)
+                    // Filter Chips (Horizontally scrollable so they never wrap awkwardly)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
@@ -214,7 +242,12 @@ fun LiveMatchesFeedScreen(
                                             .background(DrsOutRed.copy(alpha = pulseAlpha))
                                     )
                                     Spacer(modifier = Modifier.width(5.dp))
-                                    Text("🔴 Live Now (${matches.count { it.status == "LIVE" }})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = "🔴 Live Now (${matches.count { it.status == "LIVE" }})",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
+                                    )
                                 }
                             },
                             colors = FilterChipDefaults.filterChipColors(
@@ -228,7 +261,13 @@ fun LiveMatchesFeedScreen(
                         FilterChip(
                             selected = selectedFilter == "ALL",
                             onClick = { selectedFilter = "ALL" },
-                            label = { Text("All Matches (${matches.size})", fontSize = 11.sp) },
+                            label = {
+                                Text(
+                                    text = "All Matches (${matches.size})",
+                                    fontSize = 11.sp,
+                                    maxLines = 1
+                                )
+                            },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = CricketGreen.copy(alpha = 0.2f),
                                 selectedLabelColor = CricketGreen,
@@ -240,7 +279,13 @@ fun LiveMatchesFeedScreen(
                         FilterChip(
                             selected = selectedFilter == "COMPLETED",
                             onClick = { selectedFilter = "COMPLETED" },
-                            label = { Text("Completed", fontSize = 11.sp) },
+                            label = {
+                                Text(
+                                    text = "Completed",
+                                    fontSize = 11.sp,
+                                    maxLines = 1
+                                )
+                            },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = HawkEyeCyan.copy(alpha = 0.2f),
                                 selectedLabelColor = HawkEyeCyan,

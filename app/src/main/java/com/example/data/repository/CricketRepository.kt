@@ -59,27 +59,36 @@ class CricketRepository(private val dao: CricketDao) {
         extraType: String,
         commentary: String,
         shotAngle: Float,
-        pitchZone: String
+        pitchZone: String,
+        newBatsmanName: String? = null,
+        dismissedBatsman: String? = null,
+        newBatsmanOnStrike: Boolean = true
     ) {
         val match = dao.getMatchById(matchId).first() ?: return
 
-        val isLegal = extraType != "Wide" && extraType != "NoBall"
-        val totalRunToAdd = runs + if (extraType == "Wide" || extraType == "NoBall") 1 else 0
+        val isWide = extraType.equals("Wide", ignoreCase = true) || extraType.equals("WD", ignoreCase = true)
+        val isNoBall = extraType.equals("NoBall", ignoreCase = true) || extraType.equals("NB", ignoreCase = true)
+        val isBye = extraType.equals("Bye", ignoreCase = true) || extraType.equals("B", ignoreCase = true)
+        val isLegBye = extraType.equals("LegBye", ignoreCase = true) || extraType.equals("LB", ignoreCase = true)
+        val isLegal = !isWide && !isNoBall
+
+        val penalty = if (isWide || isNoBall) 1 else 0
+        val totalRunToAdd = runs + penalty
         val newScore = match.score + totalRunToAdd
         val newWickets = if (isWicket) (match.wickets + 1).coerceAtMost(10) else match.wickets
         val newLegalBalls = if (isLegal) match.legalBalls + 1 else match.legalBalls
         val newOver = newLegalBalls / 6
         val newBallInOver = newLegalBalls % 6
 
-        // Striker updates
-        val strikerRuns = if (extraType == "Wide") match.strikerRuns else match.strikerRuns + runs
-        val strikerBalls = if (extraType == "Wide") match.strikerBalls else match.strikerBalls + 1
-        val striker4s = match.strikerFours + if (runs == 4) 1 else 0
-        val striker6s = match.strikerSixes + if (runs == 6) 1 else 0
+        // Striker updates (Wides, Byes, and Leg Byes are extras and do not go to batsman's personal score)
+        val strikerRuns = if (isWide || isBye || isLegBye) match.strikerRuns else match.strikerRuns + runs
+        val strikerBalls = if (isWide) match.strikerBalls else match.strikerBalls + 1
+        val striker4s = match.strikerFours + if (runs == 4 && !isBye && !isLegBye) 1 else 0
+        val striker6s = match.strikerSixes + if (runs == 6 && !isBye && !isLegBye) 1 else 0
 
-        // Bowler updates
+        // Bowler updates (Byes and Leg Byes are not charged to bowler's figures)
         val bowlerBalls = if (isLegal) match.bowlerBalls + 1 else match.bowlerBalls
-        val bowlerRuns = match.bowlerRuns + totalRunToAdd
+        val bowlerRuns = match.bowlerRuns + if (isBye || isLegBye) 0 else totalRunToAdd
         val bowlerWickets = if (isWicket && wicketType != "Run Out") match.bowlerWickets + 1 else match.bowlerWickets
 
         // Runs needed calculation
@@ -112,39 +121,72 @@ class CricketRepository(private val dao: CricketDao) {
         var finalNonStrikerFours: Int
         var finalNonStrikerSixes: Int
 
+        var teamAPlayers = match.teamAPlayers
+        var teamBPlayers = match.teamBPlayers
+
+        val outBatterName = if (dismissedBatsman?.isNotBlank() == true) dismissedBatsman else match.strikerName
+
         if (isWicket) {
+            val isStrikerOut = outBatterName.equals(match.strikerName, ignoreCase = true)
+            val remainingBatterName = if (isStrikerOut) match.nonStrikerName else match.strikerName
+            val remainingRuns = if (isStrikerOut) match.nonStrikerRuns else strikerRuns
+            val remainingBalls = if (isStrikerOut) match.nonStrikerBalls else strikerBalls
+            val remainingFours = if (isStrikerOut) match.nonStrikerFours else striker4s
+            val remainingSixes = if (isStrikerOut) match.nonStrikerSixes else striker6s
+
             val squadList = (if (match.currentInnings == 1) match.teamAPlayers else match.teamBPlayers)
                 .split(",")
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
 
-            val nextBatsman = squadList.firstOrNull { it != match.strikerName && it != match.nonStrikerName }
-                ?: "Batsman ${newWickets + 2}"
+            val fallbackNext = squadList.firstOrNull {
+                !it.equals(match.strikerName, ignoreCase = true) && !it.equals(match.nonStrikerName, ignoreCase = true)
+            } ?: "Batsman ${newWickets + 2}"
 
-            if (switchForOverEnd) {
-                finalStrikerName = match.nonStrikerName
-                finalStrikerRuns = match.nonStrikerRuns
-                finalStrikerBalls = match.nonStrikerBalls
-                finalStrikerFours = match.nonStrikerFours
-                finalStrikerSixes = match.nonStrikerSixes
+            val incomingBatsman = if (!newBatsmanName.isNullOrBlank()) newBatsmanName.trim() else fallbackNext
 
-                finalNonStrikerName = nextBatsman
-                finalNonStrikerRuns = 0
-                finalNonStrikerBalls = 0
-                finalNonStrikerFours = 0
-                finalNonStrikerSixes = 0
-            } else {
-                finalStrikerName = nextBatsman
+            // Automatically add new incoming batsman to team squad
+            if (!incomingBatsman.startsWith("Batsman ")) {
+                if (match.currentInnings == 1) {
+                    val currentList = teamAPlayers.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                    if (!currentList.any { it.equals(incomingBatsman, ignoreCase = true) }) {
+                        teamAPlayers = if (teamAPlayers.isBlank()) incomingBatsman else "$teamAPlayers, $incomingBatsman"
+                    }
+                } else {
+                    val currentList = teamBPlayers.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                    if (!currentList.any { it.equals(incomingBatsman, ignoreCase = true) }) {
+                        teamBPlayers = if (teamBPlayers.isBlank()) incomingBatsman else "$teamBPlayers, $incomingBatsman"
+                    }
+                }
+            }
+
+            // Who is on strike for the next delivery?
+            val effectiveStrikeIsNew = if (switchForOverEnd) !newBatsmanOnStrike else newBatsmanOnStrike
+
+            if (effectiveStrikeIsNew) {
+                finalStrikerName = incomingBatsman
                 finalStrikerRuns = 0
                 finalStrikerBalls = 0
                 finalStrikerFours = 0
                 finalStrikerSixes = 0
 
-                finalNonStrikerName = match.nonStrikerName
-                finalNonStrikerRuns = match.nonStrikerRuns
-                finalNonStrikerBalls = match.nonStrikerBalls
-                finalNonStrikerFours = match.nonStrikerFours
-                finalNonStrikerSixes = match.nonStrikerSixes
+                finalNonStrikerName = remainingBatterName
+                finalNonStrikerRuns = remainingRuns
+                finalNonStrikerBalls = remainingBalls
+                finalNonStrikerFours = remainingFours
+                finalNonStrikerSixes = remainingSixes
+            } else {
+                finalStrikerName = remainingBatterName
+                finalStrikerRuns = remainingRuns
+                finalStrikerBalls = remainingBalls
+                finalStrikerFours = remainingFours
+                finalStrikerSixes = remainingSixes
+
+                finalNonStrikerName = incomingBatsman
+                finalNonStrikerRuns = 0
+                finalNonStrikerBalls = 0
+                finalNonStrikerFours = 0
+                finalNonStrikerSixes = 0
             }
         } else if (shouldSwitchStrike) {
             finalStrikerName = match.nonStrikerName
@@ -190,7 +232,9 @@ class CricketRepository(private val dao: CricketDao) {
             nonStrikerSixes = finalNonStrikerSixes,
             bowlerBalls = bowlerBalls,
             bowlerRuns = bowlerRuns,
-            bowlerWickets = bowlerWickets
+            bowlerWickets = bowlerWickets,
+            teamAPlayers = teamAPlayers,
+            teamBPlayers = teamBPlayers
         )
 
         dao.updateMatch(updatedMatch)
@@ -203,7 +247,7 @@ class CricketRepository(private val dao: CricketDao) {
             isWicket = isWicket,
             wicketType = wicketType,
             extraType = extraType,
-            batsman = match.strikerName,
+            batsman = outBatterName,
             bowler = match.bowlerName,
             commentary = commentary,
             shotAngle = shotAngle,
@@ -217,7 +261,7 @@ class CricketRepository(private val dao: CricketDao) {
         if (isWicket) {
             dao.insertNotification(
                 NotificationAlertEntity(
-                    title = "⚡ WICKET! ${match.strikerName} $wicketType",
+                    title = "⚡ WICKET! $outBatterName $wicketType",
                     message = "${match.bowlerName} strikes! Score is now $newScore/$newWickets.",
                     type = "WICKET"
                 )
@@ -263,23 +307,23 @@ class CricketRepository(private val dao: CricketDao) {
             HighlightClip(
                 id = "hl_1",
                 matchId = "match_live_1",
-                title = "Rohit's Towering 88m Six over Long-On",
+                title = "Towering 88m Six over Long-On",
                 description = "Picked the slower ball early and smoked it effortlessly out of the park! High-voltage moment in the 17th over.",
                 durationText = "0:38",
                 category = "SIX",
                 overText = "Over 16.6",
-                bowlerVsBatter = "Mohit Chawla to Rohit Verma",
+                bowlerVsBatter = "Monster Six over Long-On",
                 animationType = "MONSTER_SIX"
             ),
             HighlightClip(
                 id = "hl_2",
                 matchId = "match_live_1",
-                title = "Jasprit's Lethal Toe-Crushing Yorker",
+                title = "Lethal Toe-Crushing Yorker",
                 description = "Uproots middle stump at 138 km/h! Unplayable swinging delivery that broke the opening partnership.",
                 durationText = "0:42",
                 category = "WICKET",
                 overText = "Over 8.3",
-                bowlerVsBatter = "Jasprit Singh to Rahul Dev",
+                bowlerVsBatter = "Fast In-Swinging Yorker",
                 animationType = "YORKER_WICKET"
             ),
             HighlightClip(
@@ -395,28 +439,86 @@ class CricketRepository(private val dao: CricketDao) {
         )
     }
 
-    suspend fun updateNewBatsman(matchId: String, newBatsmanName: String) {
+    suspend fun updateNewBatsman(matchId: String, newBatsmanName: String, isStriker: Boolean = true) {
         val match = dao.getMatchById(matchId).first() ?: return
-        dao.updateMatch(
+        val cleanName = newBatsmanName.trim()
+        var teamAPlayers = match.teamAPlayers
+        var teamBPlayers = match.teamBPlayers
+
+        if (!cleanName.startsWith("Batsman")) {
+            if (match.currentInnings == 1) {
+                val list = teamAPlayers.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                if (!list.any { it.equals(cleanName, ignoreCase = true) }) {
+                    teamAPlayers = if (teamAPlayers.isBlank()) cleanName else "$teamAPlayers, $cleanName"
+                }
+            } else {
+                val list = teamBPlayers.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                if (!list.any { it.equals(cleanName, ignoreCase = true) }) {
+                    teamBPlayers = if (teamBPlayers.isBlank()) cleanName else "$teamBPlayers, $cleanName"
+                }
+            }
+        }
+
+        val updated = if (isStriker) {
             match.copy(
-                strikerName = newBatsmanName,
+                strikerName = cleanName,
                 strikerRuns = 0,
                 strikerBalls = 0,
                 strikerFours = 0,
-                strikerSixes = 0
+                strikerSixes = 0,
+                teamAPlayers = teamAPlayers,
+                teamBPlayers = teamBPlayers
             )
-        )
+        } else {
+            match.copy(
+                nonStrikerName = cleanName,
+                nonStrikerRuns = 0,
+                nonStrikerBalls = 0,
+                nonStrikerFours = 0,
+                nonStrikerSixes = 0,
+                teamAPlayers = teamAPlayers,
+                teamBPlayers = teamBPlayers
+            )
+        }
+        dao.updateMatch(updated)
     }
 
     suspend fun updateNewBowler(matchId: String, newBowlerName: String) {
         val match = dao.getMatchById(matchId).first() ?: return
+        val cleanName = newBowlerName.trim()
+        val allEvents = dao.getBallEventsForMatch(matchId).first()
+        val bowlerEvents = allEvents.filter { it.bowler.equals(cleanName, ignoreCase = true) }
+
+        val prevBalls = bowlerEvents.count { it.extraType != "Wide" && it.extraType != "NoBall" }
+        val prevRuns = bowlerEvents.sumOf { it.runs + if (it.extraType == "Wide" || it.extraType == "NoBall") 1 else 0 }
+        val prevWickets = bowlerEvents.count { it.isWicket && it.wicketType != "Run Out" }
+
+        val isTeamABowling = match.currentInnings == 2
+        var teamAPlayers = match.teamAPlayers
+        var teamBPlayers = match.teamBPlayers
+        if (!cleanName.startsWith("Bowler")) {
+            if (isTeamABowling) {
+                val list = teamAPlayers.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                if (!list.any { it.equals(cleanName, ignoreCase = true) }) {
+                    teamAPlayers = if (teamAPlayers.isBlank()) cleanName else "$teamAPlayers, $cleanName"
+                }
+            } else {
+                val list = teamBPlayers.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                if (!list.any { it.equals(cleanName, ignoreCase = true) }) {
+                    teamBPlayers = if (teamBPlayers.isBlank()) cleanName else "$teamBPlayers, $cleanName"
+                }
+            }
+        }
+
         dao.updateMatch(
             match.copy(
-                bowlerName = newBowlerName,
-                bowlerBalls = 0,
-                bowlerRuns = 0,
+                bowlerName = cleanName,
+                bowlerBalls = prevBalls,
+                bowlerRuns = prevRuns,
                 bowlerMaidens = 0,
-                bowlerWickets = 0
+                bowlerWickets = prevWickets,
+                teamAPlayers = teamAPlayers,
+                teamBPlayers = teamBPlayers
             )
         )
     }
@@ -532,6 +634,35 @@ class CricketRepository(private val dao: CricketDao) {
                 currentInnings = 1
             )
         )
+    }
+
+    suspend fun syncMatchFromCloud(dto: com.example.data.cloud.CloudMatchDto) {
+        val existing = dao.getMatchById(dto.matchId).first()
+        if (existing != null) {
+            val overs = "${dto.legalBalls / 6}.${dto.legalBalls % 6}"
+            val updated = existing.copy(
+                score = dto.score,
+                wickets = dto.wickets,
+                legalBalls = dto.legalBalls,
+                totalOvers = dto.totalOvers,
+                target = dto.target,
+                strikerName = dto.strikerName,
+                strikerRuns = dto.strikerRuns,
+                strikerBalls = dto.strikerBalls,
+                strikerFours = dto.strikerFours,
+                strikerSixes = dto.strikerSixes,
+                nonStrikerName = dto.nonStrikerName,
+                nonStrikerRuns = dto.nonStrikerRuns,
+                nonStrikerBalls = dto.nonStrikerBalls,
+                bowlerName = dto.bowlerName,
+                bowlerRuns = dto.bowlerRuns,
+                bowlerBalls = dto.bowlerBalls,
+                bowlerWickets = dto.bowlerWickets,
+                status = dto.status,
+                statusDetail = "${dto.battingTeam} batting • ${dto.score}/${dto.wickets} ($overs ov)"
+            )
+            dao.updateMatch(updated)
+        }
     }
 
     companion object {

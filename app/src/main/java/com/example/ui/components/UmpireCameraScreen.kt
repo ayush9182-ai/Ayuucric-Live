@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -461,10 +462,52 @@ fun UmpireCameraScreen(
                 }
             }
 
+            // Quick Camera controls (Torch & Flip)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        cameraLensFacing = if (cameraLensFacing == CameraSelector.LENS_FACING_BACK)
+                            CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
+                    },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1E293B).copy(alpha = 0.85f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FlipCameraAndroid,
+                        contentDescription = "Flip Camera",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = { isTorchOn = !isTorchOn },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(if (isTorchOn) StadiumGold else Color(0xFF1E293B).copy(alpha = 0.85f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FlashOn,
+                        contentDescription = "Torch",
+                        tint = if (isTorchOn) PitchDark else Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
             // Official Action Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Broadcast Stream Toggle
@@ -473,10 +516,12 @@ fun UmpireCameraScreen(
                         onClick = {
                             if (isPitchCam) onTogglePitchCam() else onToggleSideCam()
                         },
+                        modifier = Modifier.weight(1f).height(44.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isBroadcasting) WicketRed else CricketGreen
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Icon(
                             imageVector = if (isBroadcasting) Icons.Default.VideocamOff else Icons.Default.Videocam,
@@ -489,41 +534,8 @@ fun UmpireCameraScreen(
                             text = if (isBroadcasting) "Stop Stream" else "Start Live Stream",
                             color = PitchDark,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-
-                // Torch / Flip Camera buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    IconButton(
-                        onClick = {
-                            cameraLensFacing = if (cameraLensFacing == CameraSelector.LENS_FACING_BACK)
-                                CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK
-                        },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(Color(0xFF1E293B))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FlipCameraAndroid,
-                            contentDescription = "Flip Camera",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { isTorchOn = !isTorchOn },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(if (isTorchOn) StadiumGold else Color(0xFF1E293B))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FlashOn,
-                            contentDescription = "Torch",
-                            tint = if (isTorchOn) PitchDark else Color.White,
-                            modifier = Modifier.size(20.dp)
+                            fontSize = 12.sp,
+                            maxLines = 1
                         )
                     }
                 }
@@ -533,8 +545,10 @@ fun UmpireCameraScreen(
                     onClick = {
                         onRequestDrsAppeal(if (isPitchCam) "LBW" else "RUN_OUT")
                     },
+                    modifier = Modifier.widthIn(min = 115.dp).height(44.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = HawkEyeCyan),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Policy,
@@ -547,7 +561,8 @@ fun UmpireCameraScreen(
                         text = "Call DRS",
                         color = PitchDark,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        maxLines = 1
                     )
                 }
             }

@@ -184,7 +184,7 @@ fun CricHeroesLoginScreen(
                         }
                     }
                     Text(
-                        text = "Real OTP & Online Player ID Network",
+                        text = "Mobile OTP & Player Profile Network",
                         fontSize = 11.sp,
                         color = NeonGreen,
                         fontWeight = FontWeight.SemiBold
@@ -214,7 +214,7 @@ fun CricHeroesLoginScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "1. Mobile & Real OTP",
+                        text = "1. Mobile & OTP",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (step == 1) DarkCanvas else Color.White.copy(alpha = 0.7f)
@@ -292,7 +292,7 @@ fun CricHeroesLoginScreen(
                                 }
 
                                 Text(
-                                    text = "Real OTP message will be sent to your device via system SMS and notification. Enter the 4-digit code to verify your phone number.",
+                                    text = "A 4-digit verification code will be sent to your device. Enter the code below to verify your phone number.",
                                     color = Color.White.copy(alpha = 0.65f),
                                     fontSize = 12.sp,
                                     lineHeight = 16.sp
@@ -356,7 +356,7 @@ fun CricHeroesLoginScreen(
                                         Icon(Icons.Default.Sms, contentDescription = null, tint = DarkCanvas)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "SEND REAL OTP MSG",
+                                            text = "GET OTP CODE",
                                             color = DarkCanvas,
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 14.sp
@@ -379,7 +379,7 @@ fun CricHeroesLoginScreen(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Text(
-                                                    text = "Real OTP sent to $mobileNumber",
+                                                    text = "OTP sent to $mobileNumber",
                                                     fontSize = 12.sp,
                                                     color = NeonGreen,
                                                     fontWeight = FontWeight.Bold
@@ -629,7 +629,7 @@ fun CricHeroesLoginScreen(
                                             null
                                         }
                                     },
-                                    label = { Text("Unique Username (Instagram Style)") },
+                                    label = { Text("Player Username (@handle)") },
                                     leadingIcon = {
                                         Text(
                                             text = "@",

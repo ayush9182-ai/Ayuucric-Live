@@ -58,6 +58,7 @@ fun MessagesCenterDialog(
     onSelectRecipient: (CricHeroesProfile) -> Unit,
     onCloseDirectChat: () -> Unit,
     onSendDirectMessage: (recipientUsername: String, text: String) -> Unit,
+    onRefreshUsers: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
@@ -109,7 +110,8 @@ fun MessagesCenterDialog(
                             activeRecipient = activeRecipient,
                             onSelectRecipient = onSelectRecipient,
                             onCloseChat = onCloseDirectChat,
-                            onSendMessage = onSendDirectMessage
+                            onSendMessage = onSendDirectMessage,
+                            onRefreshUsers = onRefreshUsers
                         )
                     }
                 }
@@ -513,14 +515,16 @@ private fun PersonalDmsPane(
     activeRecipient: CricHeroesProfile?,
     onSelectRecipient: (CricHeroesProfile) -> Unit,
     onCloseChat: () -> Unit,
-    onSendMessage: (recipientUsername: String, text: String) -> Unit
+    onSendMessage: (recipientUsername: String, text: String) -> Unit,
+    onRefreshUsers: () -> Unit = {}
 ) {
     if (activeRecipient == null) {
         // Inbox Directory
         DmRosterInbox(
             currentUser = currentUser,
             players = communityPlayers,
-            onSelect = onSelectRecipient
+            onSelect = onSelectRecipient,
+            onRefresh = onRefreshUsers
         )
     } else {
         // 1-on-1 Direct Chat Thread
@@ -538,14 +542,22 @@ private fun PersonalDmsPane(
 private fun DmRosterInbox(
     currentUser: CricHeroesProfile,
     players: List<CricHeroesProfile>,
-    onSelect: (CricHeroesProfile) -> Unit
+    onSelect: (CricHeroesProfile) -> Unit,
+    onRefresh: () -> Unit = {}
 ) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(players, query) {
         val q = query.trim().lowercase()
+        val cleanQ = q.removePrefix("@")
         players.filter {
             it.username != currentUser.username &&
-            (q.isEmpty() || it.fullName.lowercase().contains(q) || it.username.lowercase().contains(q) || it.teamName.lowercase().contains(q))
+            (cleanQ.isEmpty() ||
+             it.fullName.lowercase().contains(q) ||
+             it.username.lowercase().contains(cleanQ) ||
+             it.id.lowercase().contains(cleanQ) ||
+             it.mobileNumber.contains(cleanQ) ||
+             it.jerseyName.lowercase().contains(q) ||
+             it.teamName.lowercase().contains(q))
         }
     }
 
@@ -554,8 +566,15 @@ private fun DmRosterInbox(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search cricketers, scorers, umpires...", fontSize = 12.sp, color = TextMuted) },
+            placeholder = { Text("Search by ID, @username, name or phone...", fontSize = 12.sp, color = TextMuted) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp)) },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { query = "" }) {
+                        Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextMuted, modifier = Modifier.size(14.dp))
+                    }
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             singleLine = true,
@@ -571,84 +590,149 @@ private fun DmRosterInbox(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        Text(
-            text = "MATCH PLAYERS & NETWORK (${filtered.size})",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextMuted,
-            letterSpacing = 1.sp
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "LIVE CLOUD NETWORK (${filtered.size})",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextMuted,
+                letterSpacing = 1.sp
+            )
+            TextButton(
+                onClick = onRefresh,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Sync Cloud",
+                    tint = CricketGreen,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = "Sync Cloud", fontSize = 10.sp, color = CricketGreen)
+            }
+        }
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            items(filtered, key = { it.id.ifBlank { it.username } }) { player ->
-                Surface(
-                    color = Color(0xFF0F172A),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(0.5.dp, Color(0xFF1E293B)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(player) }
+        if (filtered.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(20.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Text(text = "🔍", fontSize = 32.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (query.isNotBlank()) "No player found for \"$query\"" else "No other cricketers online yet",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Once another phone logs in or creates an ID, tap 'Sync Cloud' to discover them instantly.",
+                        fontSize = 11.sp,
+                        color = TextMuted,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onRefresh,
+                        colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF1E293B)),
-                            contentAlignment = Alignment.Center
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = PitchDark, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Refresh Cloud Network", fontSize = 11.sp, color = PitchDark, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(filtered, key = { it.id.ifBlank { it.username } }) { player ->
+                    Surface(
+                        color = Color(0xFF0F172A),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(0.5.dp, Color(0xFF1E293B)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(player) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(player.avatarEmoji.ifBlank { "🏏" }, fontSize = 18.sp)
-                            if (player.isOnline) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF22C55E))
-                                        .align(Alignment.BottomEnd)
-                                )
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF1E293B)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(player.avatarEmoji.ifBlank { "🏏" }, fontSize = 18.sp)
+                                if (player.isOnline) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF22C55E))
+                                            .align(Alignment.BottomEnd)
+                                    )
+                                }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = player.fullName.ifBlank { player.jerseyName },
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "@${player.username}",
+                                        fontSize = 10.sp,
+                                        color = HawkEyeCyan
+                                    )
+                                }
+                                val subText = buildString {
+                                    append(player.primaryRole)
+                                    if (player.teamName.isNotBlank()) append(" • ${player.teamName}")
+                                    if (player.mobileNumber.isNotBlank()) append(" • 📞 ${player.mobileNumber.takeLast(4).padStart(10, '*')}")
+                                }
                                 Text(
-                                    text = player.fullName.ifBlank { player.jerseyName },
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "@${player.username}",
+                                    text = subText,
                                     fontSize = 10.sp,
-                                    color = HawkEyeCyan
+                                    color = TextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Text(
-                                text = "${player.primaryRole} • ${player.teamName.ifBlank { "Local Team" }}",
-                                fontSize = 10.sp,
-                                color = TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+
+                            Icon(
+                                imageVector = Icons.Default.Chat,
+                                contentDescription = "Message",
+                                tint = CricketGreen,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
-
-                        Icon(
-                            imageVector = Icons.Default.Chat,
-                            contentDescription = "Message",
-                            tint = CricketGreen,
-                            modifier = Modifier.size(16.dp)
-                        )
                     }
                 }
             }

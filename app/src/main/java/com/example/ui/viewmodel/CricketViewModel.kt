@@ -17,6 +17,8 @@ import com.example.data.model.CricHeroesProfile
 import com.example.data.model.RoleChangeRequest
 import com.example.data.model.ChatMessage
 import com.example.data.model.DirectPersonalMessage
+import com.example.data.model.BroadcastOverlayEvent
+import com.example.data.audio.StadiumSoundManager
 import com.example.data.chat.RealChatRepository
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -36,6 +38,7 @@ import com.example.data.network.NetworkConnectivityObserver
 import com.example.data.network.NetworkStatus
 import com.example.data.repository.CricketRepository
 import com.example.data.update.AppUpdateManager
+import com.example.data.cloud.CloudSyncService
 import com.example.data.update.AppUpdateState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -308,6 +311,8 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     fun openMessagesHub(tab: Int = 0) {
         _messagesHubTab.value = tab
         _showMessagesHub.value = true
+        syncCloudUsers()
+        refreshCloudMessages()
     }
 
     fun closeMessagesHub() {
@@ -324,7 +329,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun recordQuickExtra(extraType: String = "Wide") {
-        recordBall(runs = 1, extraType = extraType)
+        recordBall(runs = 0, extraType = extraType)
     }
 
     // DRS Review State
@@ -390,14 +395,22 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
 
     // CricHeroes Profile Management
     private val profilePrefs = application.getSharedPreferences("ayuu_cricheroes_profile", Context.MODE_PRIVATE)
+
+    fun isUserLoggedIn(): Boolean {
+        val hasLoggedFlag = profilePrefs.getBoolean("is_logged_in", false)
+        val hasUsername = !profilePrefs.getString("username", "").isNullOrBlank()
+        val hasName = !profilePrefs.getString("name", "").isNullOrBlank()
+        return hasLoggedFlag && hasUsername && hasName
+    }
+
     private val _userProfile = MutableStateFlow(loadProfileFromPrefs())
     val userProfile = _userProfile.asStateFlow()
 
     private val _showProfileDialog = MutableStateFlow(false)
     val showProfileDialog = _showProfileDialog.asStateFlow()
 
-    // World-Class CricHeroes Login Screen
-    private val _showLoginScreen = MutableStateFlow(false)
+    // World-Class CricHeroes Login Screen - Opens on first visit, bypasses if logged in
+    private val _showLoginScreen = MutableStateFlow(!isUserLoggedIn())
     val showLoginScreen = _showLoginScreen.asStateFlow()
 
     fun setShowLoginScreen(show: Boolean) {
@@ -408,6 +421,42 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         saveUserProfile(profile)
         _showLoginScreen.value = false
         showBanner("Welcome ${profile.fullName}! Verified as ${profile.jerseyName} #${profile.jerseyNumber}")
+    }
+
+    fun logout() {
+        profilePrefs.edit().clear().apply()
+        _userProfile.value = loadProfileFromPrefs()
+        _communityPlayers.value = emptyList()
+        _showLoginScreen.value = true
+        showBanner("Logged out successfully.")
+    }
+
+    // WhatsApp Match Summary Card & Poster Dialog
+    private val _showWhatsAppShareDialog = MutableStateFlow(false)
+    val showWhatsAppShareDialog = _showWhatsAppShareDialog.asStateFlow()
+
+    fun setShowWhatsAppShareDialog(show: Boolean) {
+        _showWhatsAppShareDialog.value = show
+    }
+
+    // Wagon Wheel & Ball Pitch Map Visualizer Dialog
+    private val _showWagonWheelDialog = MutableStateFlow(false)
+    val showWagonWheelDialog = _showWagonWheelDialog.asStateFlow()
+
+    fun setShowWagonWheelDialog(show: Boolean) {
+        _showWagonWheelDialog.value = show
+    }
+
+    // Hotstar-Style Live Broadcast Graphic Overlays (TV Lower-Thirds)
+    private val _activeBroadcastOverlay = MutableStateFlow<BroadcastOverlayEvent?>(null)
+    val activeBroadcastOverlay = _activeBroadcastOverlay.asStateFlow()
+
+    fun triggerBroadcastOverlay(event: BroadcastOverlayEvent) {
+        _activeBroadcastOverlay.value = event
+    }
+
+    fun dismissBroadcastOverlay() {
+        _activeBroadcastOverlay.value = null
     }
 
     // Instagram-Style Live Match Chat (Real Firebase Firestore)
@@ -487,6 +536,81 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     private val _drsBroadcast = MutableStateFlow<DrsBroadcastAlert?>(null)
     val drsBroadcast = _drsBroadcast.asStateFlow()
 
+    // Bowler and Batsman Rotation Dialogs
+    private val _showChangeBowlerDialog = MutableStateFlow(false)
+    val showChangeBowlerDialog = _showChangeBowlerDialog.asStateFlow()
+
+    private val _showNewBatsmanDialog = MutableStateFlow(false)
+    val showNewBatsmanDialog = _showNewBatsmanDialog.asStateFlow()
+
+    private val _pendingWicketType = MutableStateFlow("Bowled")
+    val pendingWicketType = _pendingWicketType.asStateFlow()
+
+    private val _showChangeBatsmanDialog = MutableStateFlow(false)
+    val showChangeBatsmanDialog = _showChangeBatsmanDialog.asStateFlow()
+
+    fun openChangeBowlerDialog() { _showChangeBowlerDialog.value = true }
+    fun closeChangeBowlerDialog() { _showChangeBowlerDialog.value = false }
+
+    fun openNewBatsmanDialog(wicketType: String = "Bowled") {
+        _pendingWicketType.value = wicketType
+        _showNewBatsmanDialog.value = true
+    }
+    fun closeNewBatsmanDialog() { _showNewBatsmanDialog.value = false }
+
+    fun openChangeBatsmanDialog() { _showChangeBatsmanDialog.value = true }
+    fun closeChangeBatsmanDialog() { _showChangeBatsmanDialog.value = false }
+
+    fun changeBowler(newBowlerName: String) {
+        viewModelScope.launch {
+            repository.updateNewBowler(_selectedMatchId.value, newBowlerName)
+            showBanner("🎳 Naye Bowler: $newBowlerName attack par aaye hain!")
+            try {
+                val sidhuMsg = "Bowling change guru! Ab balling karenge $newBowlerName! Thoko taali!"
+                sidhuCommentaryManager.speak(sidhuMsg)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun changeBatsman(isStriker: Boolean, newName: String) {
+        viewModelScope.launch {
+            repository.updateNewBatsman(_selectedMatchId.value, newName, isStriker)
+            val role = if (isStriker) "Striker" else "Non-Striker"
+            showBanner("🏏 $role badal kar $newName kiya gaya!")
+        }
+    }
+
+    fun recordWicketWithNewBatsman(
+        dismissedBatsman: String,
+        newBatsmanName: String,
+        wicketType: String,
+        newBatsmanOnStrike: Boolean,
+        runsOnBall: Int = 0
+    ) {
+        viewModelScope.launch {
+            val commentary = "OUT! $dismissedBatsman $wicketType! In comes $newBatsmanName."
+            repository.recordDelivery(
+                matchId = _selectedMatchId.value,
+                runs = runsOnBall,
+                isWicket = true,
+                wicketType = wicketType,
+                extraType = "None",
+                commentary = commentary,
+                shotAngle = 0f,
+                pitchZone = "Good Length",
+                newBatsmanName = newBatsmanName,
+                dismissedBatsman = dismissedBatsman,
+                newBatsmanOnStrike = newBatsmanOnStrike
+            )
+            showBanner("⚡ OUT! $dismissedBatsman $wicketType! $newBatsmanName maidaan par aaye.")
+            try {
+                StadiumSoundManager.playWicketDismissal()
+                val sidhuMsg = "$dismissedBatsman out ho kar pavilion laut gaye guru! Ab naye ballebaaz $newBatsmanName maidaan par aaye hain! Thoko taali!"
+                sidhuCommentaryManager.speak(sidhuMsg)
+            } catch (_: Exception) {}
+        }
+    }
+
     // Camera Streaming State (Phone 1 & Phone 2)
     private val _isStreamingPitchCam = MutableStateFlow(true)
     val isStreamingPitchCam = _isStreamingPitchCam.asStateFlow()
@@ -552,6 +676,33 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             checkPeriodicUpdateReminder()
         }
         listenToMatchChat(_selectedMatchId.value)
+
+        // Continuous Cloud Sync for Live Match, Users Directory & Messages across multiple phones
+        viewModelScope.launch {
+            syncCloudUsers()
+            val myProf = _userProfile.value
+            if (myProf.username.isNotBlank()) {
+                CloudSyncService.registerUserProfileInCloud(myProf)
+            }
+
+            while (true) {
+                delay(2500)
+                try {
+                    // 1. Sync live match for non-scorer roles (Viewers, Umpires)
+                    if (_currentDeviceRole.value != DeviceRole.OFFICIAL_SCORER) {
+                        val cloudMatch = CloudSyncService.fetchLiveMatchFromCloud()
+                        if (cloudMatch != null && cloudMatch.updatedAt > 0) {
+                            repository.syncMatchFromCloud(cloudMatch)
+                        }
+                    }
+
+                    // 2. Refresh messages from central hub
+                    refreshCloudMessages()
+                } catch (e: Throwable) {
+                    android.util.Log.w("CricketViewModel", "Cloud sync loop error: ${e.message}")
+                }
+            }
+        }
     }
 
     private fun startHighlightVideoLoop() {
@@ -619,6 +770,14 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             // Trigger AI Sidhu Paaji Commentary in background / foreground
             try {
                 val match = currentMatch.value
+                val isWide = extraType.equals("Wide", ignoreCase = true) || extraType.equals("WD", ignoreCase = true)
+                val isNoBall = extraType.equals("NoBall", ignoreCase = true) || extraType.equals("NB", ignoreCase = true)
+                val penalty = if (isWide || isNoBall) 1 else 0
+                val totalAdded = runs + penalty
+                val newScore = (match?.score ?: 0) + totalAdded
+                val newWkts = if (isWicket) ((match?.wickets ?: 0) + 1).coerceAtMost(10) else (match?.wickets ?: 0)
+                val currentScoreStr = "$newScore/$newWkts"
+
                 val overNum = (match?.legalBalls ?: 0) / 6
                 val ballNum = ((match?.legalBalls ?: 0) % 6) + 1
                 val ballEvent = BallEventEntity(
@@ -633,7 +792,6 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                     bowler = match?.bowlerName ?: "Bowler",
                     commentary = commentary
                 )
-                val currentScoreStr = "${match?.score ?: 0}/${match?.wickets ?: 0}"
                 val sidhuDialogue = SidhuCommentaryGenerator.generateBallCommentary(
                     ball = ballEvent,
                     strikerName = match?.strikerName ?: "Ballebaaz",
@@ -642,6 +800,86 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                     style = sidhuVoiceStyle.value
                 )
                 sidhuCommentaryManager.speak(sidhuDialogue)
+
+                // Instantly broadcast updated live score to cloud for other phones
+                if (match != null) {
+                    val updatedMatch = match.copy(score = newScore, wickets = newWkts)
+                    CloudSyncService.publishLiveMatch(updatedMatch, ballEvent)
+                }
+            } catch (_: Exception) {}
+
+            // Trigger Stadium Sound FX and Hotstar TV Broadcast Overlay
+            try {
+                val match = currentMatch.value
+                val strikerName = match?.strikerName ?: "Batter"
+                val bowlerName = match?.bowlerName ?: "Bowler"
+                val prevStrikerRuns = match?.strikerRuns ?: 0
+                val newStrikerRuns = prevStrikerRuns + runs
+
+                if (isWicket) {
+                    StadiumSoundManager.playWicketDismissal()
+                    triggerBroadcastOverlay(
+                        BroadcastOverlayEvent(
+                            type = BroadcastOverlayEvent.OverlayType.WICKET_DISMISSAL,
+                            headline = "⚡ WICKET! $wicketType",
+                            subheadline = "$bowlerName dismisses $strikerName",
+                            statDetail = "$prevStrikerRuns runs",
+                            accentColorHex = 0xFFEF4444
+                        )
+                    )
+                } else if (prevStrikerRuns < 50 && newStrikerRuns >= 50) {
+                    StadiumSoundManager.playSixCheer()
+                    triggerBroadcastOverlay(
+                        BroadcastOverlayEvent(
+                            type = BroadcastOverlayEvent.OverlayType.MILESTONE_50,
+                            headline = "⭐ HALF CENTURY 50!",
+                            subheadline = "$strikerName raises his bat!",
+                            statDetail = "$newStrikerRuns Runs",
+                            accentColorHex = 0xFFFFD700
+                        )
+                    )
+                } else if (prevStrikerRuns < 100 && newStrikerRuns >= 100) {
+                    StadiumSoundManager.playSixCheer()
+                    triggerBroadcastOverlay(
+                        BroadcastOverlayEvent(
+                            type = BroadcastOverlayEvent.OverlayType.MILESTONE_100,
+                            headline = "👑 MAGNIFICENT 100!",
+                            subheadline = "Spectacular Century by $strikerName!",
+                            statDetail = "$newStrikerRuns Runs",
+                            accentColorHex = 0xFFFFD700
+                        )
+                    )
+                } else if (runs == 6) {
+                    StadiumSoundManager.playSixCheer()
+                    triggerBroadcastOverlay(
+                        BroadcastOverlayEvent(
+                            type = BroadcastOverlayEvent.OverlayType.MAXIMUM_SIX,
+                            headline = "💥 MAXIMUM SIX!",
+                            subheadline = "$strikerName clears the ropes with authority",
+                            statDetail = "88m Long-on",
+                            accentColorHex = 0xFF00E676
+                        )
+                    )
+                } else if (runs == 4) {
+                    StadiumSoundManager.playFourHorn()
+                    triggerBroadcastOverlay(
+                        BroadcastOverlayEvent(
+                            type = BroadcastOverlayEvent.OverlayType.BOUNDARY_FOUR,
+                            headline = "⚡ BOUNDARY FOUR!",
+                            subheadline = "$strikerName pierces the field with precision",
+                            statDetail = "Cover Drive",
+                            accentColorHex = 0xFF00E5FF
+                        )
+                    )
+                }
+
+                // Check for over completion to automatically prompt Bowler Change
+                val isLegal = extraType != "Wide" && extraType != "NoBall"
+                val prevLegal = match?.legalBalls ?: 0
+                if (isLegal && (prevLegal + 1) > 0 && (prevLegal + 1) % 6 == 0) {
+                    _showChangeBowlerDialog.value = true
+                    showBanner("Over Khatam! Agle over ke liye Bowler chunein 🎳")
+                }
             } catch (_: Exception) {}
         }
     }
@@ -678,7 +916,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // DRS Simulation Controls
-    fun startDrsReview(appealType: String = "LBW", batsman: String = "Rohit Verma", bowler: String = "Jasprit Singh", onFieldDecision: String = "NOT OUT") {
+    fun startDrsReview(appealType: String = "LBW", batsman: String = "Batter", bowler: String = "Bowler", onFieldDecision: String = "NOT OUT") {
         drsAutoJob?.cancel()
         _drsState.value = DrsReviewState(
             appealType = appealType,
@@ -849,6 +1087,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     fun saveUserProfile(profile: CricHeroesProfile) {
         _userProfile.value = profile
         profilePrefs.edit()
+            .putBoolean("is_logged_in", true)
             .putString("id", profile.id)
             .putString("username", profile.username)
             .putString("mobile", profile.mobileNumber)
@@ -865,6 +1104,11 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
 
         // Sync with community player roster
         registerCommunityPlayer(profile)
+
+        viewModelScope.launch {
+            CloudSyncService.registerUserProfileInCloud(profile)
+            syncCloudUsers()
+        }
 
         _showProfileDialog.value = false
         showBanner("Player Profile Verified! @${profile.username} (#${profile.jerseyNumber})")
@@ -965,6 +1209,19 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                 timestamp = messageData["timestamp"] as Long
             )
             _chatMessages.value = _chatMessages.value + localMsg
+        }
+
+        // Send to public cloud hub so other devices receive match chat
+        viewModelScope.launch {
+            CloudSyncService.sendCloudMessage(
+                roomId = _selectedMatchId.value,
+                senderUsername = profile.username,
+                recipientUsername = "ALL",
+                senderName = profile.fullName.ifBlank { profile.jerseyName },
+                senderRole = roleLabel,
+                avatarEmoji = profile.avatarEmoji.ifBlank { "🏏" },
+                message = text.trim()
+            )
         }
     }
 
@@ -1119,6 +1376,19 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             )
             _personalMessages.value = _personalMessages.value + localMsg
         }
+
+        // Send to cloud hub for cross-device direct messaging
+        viewModelScope.launch {
+            CloudSyncService.sendCloudMessage(
+                roomId = roomId,
+                senderUsername = myProfile.username,
+                recipientUsername = recipient.username,
+                senderName = myProfile.jerseyName.ifBlank { myProfile.fullName },
+                senderRole = myProfile.primaryRole,
+                avatarEmoji = myProfile.avatarEmoji.ifBlank { "🏏" },
+                message = text.trim()
+            )
+        }
     }
 
     fun sendDirectMessage(recipientUsername: String, text: String) {
@@ -1146,56 +1416,91 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         _communityPlayers.value = listOf(profile) + existing
     }
 
+    fun syncCloudUsers() {
+        viewModelScope.launch {
+            try {
+                val cloudUsers = CloudSyncService.fetchAllUsersFromCloud()
+                if (cloudUsers.isNotEmpty()) {
+                    val myProfile = _userProfile.value
+                    val merged = mutableListOf<CricHeroesProfile>()
+                    if (myProfile.username.isNotBlank()) {
+                        merged.add(myProfile)
+                    }
+                    cloudUsers.forEach { cu ->
+                        if (cu.username.isNotBlank() && merged.none { it.username.equals(cu.username, ignoreCase = true) || (it.id.isNotBlank() && it.id == cu.id) }) {
+                            merged.add(cu)
+                        }
+                    }
+                    _communityPlayers.value = merged
+                }
+            } catch (e: Throwable) {
+                android.util.Log.w("CricketViewModel", "syncCloudUsers failed: ${e.message}")
+            }
+        }
+    }
+
+    fun refreshCloudMessages() {
+        viewModelScope.launch {
+            try {
+                val cloudMsgs = CloudSyncService.fetchAllCloudMessages()
+                if (cloudMsgs.isNotEmpty()) {
+                    val myUser = _userProfile.value.username.trim().removePrefix("@").lowercase()
+
+                    // Match Room messages
+                    val currentRoomId = _selectedMatchId.value
+                    val roomMsgs = cloudMsgs.filter {
+                        it.roomId == currentRoomId || it.roomId == "match_live_1" || it.roomId.isBlank()
+                    }.map { cm ->
+                        val isMe = cm.senderUsername.trim().removePrefix("@").lowercase() == myUser
+                        ChatMessage(
+                            id = cm.id,
+                            senderName = cm.senderName,
+                            senderRole = cm.senderRole,
+                            avatarEmoji = cm.avatarEmoji,
+                            message = cm.message,
+                            isFromMe = isMe,
+                            timestamp = cm.timestamp
+                        )
+                    }
+                    if (roomMsgs.isNotEmpty()) {
+                        _chatMessages.value = roomMsgs
+                    }
+
+                    // Direct Personal Messages
+                    val activeRecipient = _activeDmRecipient.value
+                    if (activeRecipient != null) {
+                        val activeUser = activeRecipient.username.trim().removePrefix("@").lowercase()
+                        val dmRoomId = getDmRoomId(myUser, activeUser)
+                        val dmMessages = cloudMsgs.filter { cm ->
+                            val s = cm.senderUsername.trim().removePrefix("@").lowercase()
+                            val r = cm.recipientUsername.trim().removePrefix("@").lowercase()
+                            cm.roomId == dmRoomId || (s == myUser && r == activeUser) || (s == activeUser && r == myUser)
+                        }.map { cm ->
+                            val isMe = cm.senderUsername.trim().removePrefix("@").lowercase() == myUser
+                            ChatMessage(
+                                id = cm.id,
+                                senderName = cm.senderName,
+                                senderRole = cm.senderRole,
+                                avatarEmoji = cm.avatarEmoji,
+                                message = cm.message,
+                                isFromMe = isMe,
+                                timestamp = cm.timestamp
+                            )
+                        }
+                        if (dmMessages.isNotEmpty()) {
+                            _personalMessages.value = dmMessages
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.w("CricketViewModel", "refreshCloudMessages failed: ${e.message}")
+            }
+        }
+    }
+
     private fun initialCommunityPlayers(): List<CricHeroesProfile> {
         val myProfile = loadProfileFromPrefs()
-        return listOf(
-            myProfile,
-            CricHeroesProfile(
-                id = "ch_rohit_45",
-                username = "rohit_sharma_45",
-                mobileNumber = "+919876543210",
-                fullName = "Rohit V.",
-                jerseyName = "HITMAN",
-                jerseyNumber = 45,
-                primaryRole = "Top-Order Batter",
-                teamName = "Mumbai Kings CC",
-                city = "Mumbai, India",
-                avatarEmoji = "🦁",
-                runs = 1420,
-                wickets = 4,
-                isOnline = true
-            ),
-            CricHeroesProfile(
-                id = "ch_vikram_umpire",
-                username = "vikram_scorer_pro",
-                mobileNumber = "+919876543211",
-                fullName = "Vikram Scorer",
-                jerseyName = "VIKRAM",
-                jerseyNumber = 18,
-                primaryRole = "Official Scorer & Umpire",
-                teamName = "Turf Officials Board",
-                city = "Delhi, India",
-                avatarEmoji = "📋",
-                runs = 310,
-                wickets = 12,
-                isOnline = true
-            ),
-            CricHeroesProfile(
-                id = "ch_hardik_33",
-                username = "hardik_allrounder_33",
-                mobileNumber = "+919876543212",
-                fullName = "Hardik P.",
-                jerseyName = "KUNGFU",
-                jerseyNumber = 33,
-                primaryRole = "All-Rounder",
-                teamName = "Baroda Blasters",
-                city = "Vadodara, India",
-                avatarEmoji = "⚡",
-                runs = 980,
-                wickets = 38,
-                isOnline = false
-            )
-        )
+        return if (myProfile.username.isNotBlank()) listOf(myProfile) else emptyList()
     }
 
     fun setShowRoleDialog(show: Boolean) {

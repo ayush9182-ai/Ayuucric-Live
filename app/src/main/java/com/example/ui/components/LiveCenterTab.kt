@@ -77,7 +77,10 @@ fun LiveCenterTab(
     onOpenMessagesHub: () -> Unit = {},
     onTogglePitchCam: () -> Unit = {},
     onToggleSideCam: () -> Unit = {},
-    onTriggerAppeal: (String) -> Unit = {}
+    onTriggerAppeal: (String) -> Unit = {},
+    onChangeBowler: () -> Unit = {},
+    onChangeBatsman: () -> Unit = {},
+    onOpenNewBatsmanDialog: () -> Unit = {}
 ) {
     val activeMatch = match ?: remember { CricketRepository.sampleMatch }
     val activeBallEvents = if (ballEvents.isNotEmpty()) ballEvents else remember { CricketRepository.sampleBallEvents }
@@ -168,7 +171,9 @@ fun LiveCenterTab(
                         ScoreBanner(
                             match = activeMatch,
                             recentBalls = activeBallEvents,
-                            onSwitchStriker = onSwitchStriker
+                            onSwitchStriker = onSwitchStriker,
+                            onChangeBowler = onChangeBowler,
+                            onChangeBatsman = onChangeBatsman
                         )
                     }
 
@@ -242,10 +247,12 @@ fun LiveCenterTab(
                 DeviceRole.OFFICIAL_SCORER -> {
                     ScorerPersistentDock(
                         onRecordRun = onRecordRun,
-                        onRecordWicket = onRecordWicket,
+                        onRecordWicket = onOpenNewBatsmanDialog,
                         onRecordExtra = onRecordExtra,
                         onUndoDelivery = onUndoDelivery,
-                        onOpenFullKeypad = onOpenScorer
+                        onOpenFullKeypad = onOpenScorer,
+                        onChangeBowler = onChangeBowler,
+                        onChangeBatsman = onChangeBatsman
                     )
                 }
 
@@ -515,7 +522,9 @@ private fun ScorerPersistentDock(
     onRecordWicket: () -> Unit,
     onRecordExtra: (String) -> Unit,
     onUndoDelivery: () -> Unit,
-    onOpenFullKeypad: () -> Unit
+    onOpenFullKeypad: () -> Unit,
+    onChangeBowler: () -> Unit = {},
+    onChangeBatsman: () -> Unit = {}
 ) {
     Surface(
         color = Color(0xFA1E1B0F),
@@ -538,19 +547,46 @@ private fun ScorerPersistentDock(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "⚡ OFFICIAL SCORER DOCK",
+                    text = "⚡ SCORER DOCK",
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Black,
                     color = StadiumGold,
                     letterSpacing = 1.sp
                 )
-                Text(
-                    text = "Full Keypad ›",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = HawkEyeCyan,
-                    modifier = Modifier.clickable { onOpenFullKeypad() }
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🎳 Bowler",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = StadiumGold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(StadiumGold.copy(alpha = 0.15f))
+                            .clickable { onChangeBowler() }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                    Text(
+                        text = "🏏 Batter",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CricketGreen,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(CricketGreen.copy(alpha = 0.15f))
+                            .clickable { onChangeBatsman() }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                    Text(
+                        text = "Keypad ›",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = HawkEyeCyan,
+                        modifier = Modifier.clickable { onOpenFullKeypad() }
+                    )
+                }
             }
 
             // Quick Scoring Button Strip

@@ -75,7 +75,10 @@ fun ScorerControllerSheet(
     currentRole: DeviceRole,
     onOpenRoleDialog: () -> Unit,
     strikerName: String,
-    bowlerName: String
+    bowlerName: String,
+    onChangeBowler: () -> Unit = {},
+    onChangeBatsman: () -> Unit = {},
+    onOpenNewBatsmanDialog: (String) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -190,14 +193,32 @@ fun ScorerControllerSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(PitchCard)
-                    .padding(12.dp),
+                    .padding(10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("Striker", fontSize = 11.sp, color = TextMuted)
-                    Text(strikerName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = StadiumGold)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(enabled = isAuthorized) {
+                            onChangeBatsman()
+                            onDismiss()
+                        }
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Striker", fontSize = 10.sp, color = TextMuted)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("✏️ Edit", fontSize = 9.sp, color = CricketGreen)
+                    }
+                    Text(
+                        text = strikerName,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = StadiumGold,
+                        maxLines = 1
+                    )
                 }
+
                 IconButton(
                     onClick = onSwitchStriker,
                     enabled = isAuthorized,
@@ -209,12 +230,31 @@ fun ScorerControllerSheet(
                         imageVector = Icons.Default.SwapHoriz,
                         contentDescription = "Rotate Striker",
                         tint = if (isAuthorized) CricketGreen else Color.Gray,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Current Bowler", fontSize = 11.sp, color = TextMuted)
-                    Text(bowlerName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(enabled = isAuthorized) {
+                            onChangeBowler()
+                            onDismiss()
+                        },
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🎳 Change", fontSize = 9.sp, color = StadiumGold)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Bowler", fontSize = 10.sp, color = TextMuted)
+                    }
+                    Text(
+                        text = bowlerName,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        maxLines = 1
+                    )
                 }
             }
 
@@ -426,14 +466,18 @@ fun ScorerControllerSheet(
             Button(
                 onClick = {
                     if (isAuthorized) {
-                        onRecordBall(
-                            selectedRuns,
-                            isWicketSelected,
-                            selectedWicketType,
-                            selectedExtra,
-                            shotAngle,
-                            selectedPitchZone
-                        )
+                        if (isWicketSelected) {
+                            onOpenNewBatsmanDialog(selectedWicketType)
+                        } else {
+                            onRecordBall(
+                                selectedRuns,
+                                false,
+                                selectedWicketType,
+                                selectedExtra,
+                                shotAngle,
+                                selectedPitchZone
+                            )
+                        }
                         onDismiss()
                     }
                 },
@@ -449,9 +493,9 @@ fun ScorerControllerSheet(
             ) {
                 Text(
                     text = if (!isAuthorized) "LOCK: SCORER PHONE ONLY"
-                    else if (isWicketSelected) "CONFIRM WICKET ($selectedWicketType)"
+                    else if (isWicketSelected) "⚡ RECORD WICKET & NEW BATTER ➔"
                     else "RECORD $selectedRuns RUN(S)",
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Black,
                     color = if (isWicketSelected) Color.White else PitchDark
                 )
