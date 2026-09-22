@@ -52,10 +52,14 @@ fun MessagesCenterDialog(
     onSelectRecipient: (CricHeroesProfile) -> Unit,
     onCloseDirectChat: () -> Unit,
     onSendDirectMessage: (recipientUsername: String, text: String) -> Unit,
+    onDeleteMatchMessage: ((String) -> Unit)? = null,
+    onDeleteDirectMessage: ((String) -> Unit)? = null,
     onRefreshUsers: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
+    val isOwner = currentUser.username.trim().removePrefix("@").equals("ayush_7", ignoreCase = true) ||
+                  currentUser.fullName.lowercase().contains("ayush")
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -91,8 +95,10 @@ fun MessagesCenterDialog(
                         MatchLiveRoomChatPane(
                             matchTitle = matchTitle,
                             messages = matchMessages,
+                            isOwner = isOwner,
                             onSendMessage = onSendMatchMessage,
-                            onSendReaction = onSendMatchReaction
+                            onSendReaction = onSendMatchReaction,
+                            onDeleteMessage = onDeleteMatchMessage
                         )
                     } else {
                         PersonalDmsPane(
@@ -100,9 +106,11 @@ fun MessagesCenterDialog(
                             communityPlayers = communityPlayers,
                             personalMessages = personalMessages,
                             activeRecipient = activeRecipient,
+                            isOwner = isOwner,
                             onSelectRecipient = onSelectRecipient,
                             onCloseChat = onCloseDirectChat,
                             onSendMessage = onSendDirectMessage,
+                            onDeleteMessage = onDeleteDirectMessage,
                             onRefreshUsers = onRefreshUsers
                         )
                     }
@@ -210,8 +218,10 @@ private fun MessagesHeaderBar(
 private fun MatchLiveRoomChatPane(
     matchTitle: String,
     messages: List<ChatMessage>,
+    isOwner: Boolean = false,
     onSendMessage: (String) -> Unit,
-    onSendReaction: (String) -> Unit
+    onSendReaction: (String) -> Unit,
+    onDeleteMessage: ((String) -> Unit)? = null
 ) {
     var textInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -267,8 +277,27 @@ private fun MatchLiveRoomChatPane(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item {
+                Surface(
+                    color = Color(0xFF1E293B).copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                ) {
+                    Text(
+                        text = "⏱️ Messages 1 mahine tak safe rehte hain, uske baad auto-delete hote hain taaki storage light rahe.",
+                        color = TextMuted,
+                        fontSize = 10.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
             items(messages, key = { it.id }) { msg ->
-                LiveChatMessageBubble(msg = msg)
+                LiveChatMessageBubble(
+                    msg = msg,
+                    isOwner = isOwner,
+                    onDelete = { onDeleteMessage?.invoke(msg.id) }
+                )
             }
         }
 
@@ -351,13 +380,18 @@ private fun MatchLiveRoomChatPane(
 }
 
 @Composable
-private fun LiveChatMessageBubble(msg: ChatMessage) {
+private fun LiveChatMessageBubble(
+    msg: ChatMessage,
+    isOwner: Boolean = false,
+    onDelete: (() -> Unit)? = null
+) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val timeStr = timeFormat.format(Date(msg.timestamp))
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (msg.isFromMe) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (msg.isFromMe) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom
     ) {
         if (!msg.isFromMe) {
             Box(
@@ -370,6 +404,21 @@ private fun LiveChatMessageBubble(msg: ChatMessage) {
                 Text(msg.avatarEmoji.ifBlank { "🏏" }, fontSize = 14.sp)
             }
             Spacer(modifier = Modifier.width(6.dp))
+        }
+
+        if (msg.isFromMe || isOwner) {
+            IconButton(
+                onClick = { onDelete?.invoke() },
+                modifier = Modifier.size(24.dp).padding(bottom = 2.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = "Delete",
+                    tint = Color.Red.copy(alpha = 0.6f),
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(3.dp))
         }
 
         Column(
@@ -453,9 +502,11 @@ private fun PersonalDmsPane(
     communityPlayers: List<CricHeroesProfile>,
     personalMessages: List<ChatMessage>,
     activeRecipient: CricHeroesProfile?,
+    isOwner: Boolean = false,
     onSelectRecipient: (CricHeroesProfile) -> Unit,
     onCloseChat: () -> Unit,
     onSendMessage: (recipientUsername: String, text: String) -> Unit,
+    onDeleteMessage: ((String) -> Unit)? = null,
     onRefreshUsers: () -> Unit = {}
 ) {
     if (activeRecipient == null) {
@@ -470,8 +521,10 @@ private fun PersonalDmsPane(
             currentUser = currentUser,
             recipient = activeRecipient,
             messages = personalMessages,
+            isOwner = isOwner,
             onBack = onCloseChat,
-            onSendMessage = onSendMessage
+            onSendMessage = onSendMessage,
+            onDeleteMessage = onDeleteMessage
         )
     }
 }
@@ -600,8 +653,10 @@ private fun DmChatConversation(
     currentUser: CricHeroesProfile,
     recipient: CricHeroesProfile,
     messages: List<ChatMessage>,
+    isOwner: Boolean = false,
     onBack: () -> Unit,
-    onSendMessage: (recipientUsername: String, text: String) -> Unit
+    onSendMessage: (recipientUsername: String, text: String) -> Unit,
+    onDeleteMessage: ((String) -> Unit)? = null
 ) {
     var textInput by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -663,8 +718,27 @@ private fun DmChatConversation(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item {
+                Surface(
+                    color = Color(0xFF1E293B).copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                ) {
+                    Text(
+                        text = "⏱️ Messages 1 mahine tak safe rehte hain, uske baad auto-delete hote hain taaki storage light rahe.",
+                        color = TextMuted,
+                        fontSize = 10.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
             items(messages, key = { it.id }) { msg ->
-                LiveChatMessageBubble(msg = msg)
+                LiveChatMessageBubble(
+                    msg = msg,
+                    isOwner = isOwner,
+                    onDelete = { onDeleteMessage?.invoke(msg.id) }
+                )
             }
         }
 

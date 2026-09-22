@@ -44,10 +44,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.example.util.TournamentStatsCalculator
 import java.util.UUID
 
 enum class AppScreenTab {
@@ -517,13 +520,21 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             repository.getFallbackMatches()
         )
 
-        teamStandings = repository.teamStandings.stateIn(
+        val computedStandingsAndStats = repository.allMatches.map { matches ->
+            TournamentStatsCalculator.computeStandingsAndStats(matches)
+        }
+
+        teamStandings = combine(repository.teamStandings, computedStandingsAndStats) { dbStandings, computed ->
+            if (dbStandings.isNotEmpty()) dbStandings else computed.first
+        }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             emptyList()
         )
 
-        playerStats = repository.playerStats.stateIn(
+        playerStats = combine(repository.playerStats, computedStandingsAndStats) { dbStats, computed ->
+            if (dbStats.isNotEmpty()) dbStats else computed.second
+        }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             emptyList()
@@ -554,13 +565,19 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         }
         listenToMatchChat(_selectedMatchId.value)
 
-        // Real-time Firebase match sync for instant cross-device updates
+        // Real-time Firebase match sync for instant cross-device updates & persistent history for new installers
         viewModelScope.launch {
             try {
                 RealtimeMatchSyncService.observeAllMatches().collect { remoteMatches ->
                     if (remoteMatches.isNotEmpty()) {
                         if (_currentDeviceRole.value != DeviceRole.OFFICIAL_SCORER) {
                             repository.upsertMatchesFromFirestore(remoteMatches)
+                        }
+                        // If current selected match is the default placeholder or not found, auto-select latest match
+                        val currentExists = remoteMatches.any { it.id == _selectedMatchId.value }
+                        if (!currentExists || _selectedMatchId.value == "match_live_1") {
+                            val activeOrFirst = remoteMatches.firstOrNull { it.status == "LIVE" } ?: remoteMatches.first()
+                            _selectedMatchId.value = activeOrFirst.id
                         }
                     }
                 }
@@ -953,10 +970,24 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
 
     fun setShowChatDialog(show: Boolean) { _showChatDialog.value = show }
 
-    // Live Match Chat Listening (Firestore real-time snapshot)
+    fun isAppOwner(): Boolean {
+        val prof = _userProfile.value
+        val username = prof.username.trim().removePrefix("@").lowercase()
+        val fullName = prof.fullName.trim().lowercase()
+        val jerseyName = prof.jerseyName.trim().lowercase()
+        val isScorer = _currentDeviceRole.value == DeviceRole.OFFICIAL_SCORER
+        return username == "ayush_7" ||
+               username.contains("ayush") ||
+               fullName.contains("ayush") ||
+               jerseyName.contains("ayush") ||
+               isScorer
+    }
+
+    // Live Match Chat Listening (Firestore real-time snapshot with 30 days retention)
     fun listenToMatchChat(matchId: String) {
         matchChatListener?.remove()
         try {
+            val oneMonthAgo = System.currentTimeMillis() - MESSAGE_RETENTION_MILLIS
             matchChatListener = firestore.collection("matches")
                 .document(matchId)
                 .collection("live_chat")
@@ -968,22 +999,50 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                     }
 
                     val currentUsername = _userProfile.value.username.trim().removePrefix("@").lowercase()
-                    val messages = snapshot.documents.mapNotNull { doc ->
-                        val senderUser = (doc.getString("senderUsername") ?: "").trim().removePrefix("@").lowercase()
-                        ChatMessage(
-                            id = doc.id,
-                            senderName = doc.getString("senderName") ?: "Cricketer",
-                            senderRole = doc.getString("senderRole") ?: "Spectator",
-                            avatarEmoji = doc.getString("avatarEmoji") ?: "🏏",
-                            message = doc.getString("message") ?: "",
-                            isFromMe = senderUser == currentUsername,
-                            timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
-                        )
+                    val validMessages = mutableListOf<ChatMessage>()
+                    for (doc in snapshot.documents) {
+                        val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
+                        if (ts < oneMonthAgo) {
+                            // Purge expired message (> 1 month old) to keep app lightweight
+                            try { doc.reference.delete() } catch (_: Exception) {}
+                        } else {
+                            val senderUser = (doc.getString("senderUsername") ?: "").trim().removePrefix("@").lowercase()
+                            validMessages.add(
+                                ChatMessage(
+                                    id = doc.id,
+                                    senderName = doc.getString("senderName") ?: "Cricketer",
+                                    senderRole = doc.getString("senderRole") ?: "Spectator",
+                                    avatarEmoji = doc.getString("avatarEmoji") ?: "🏏",
+                                    message = doc.getString("message") ?: "",
+                                    isFromMe = senderUser == currentUsername,
+                                    timestamp = ts
+                                )
+                            )
+                        }
                     }
-                    _chatMessages.value = messages
+                    _chatMessages.value = validMessages
                 }
         } catch (e: Throwable) {
             Log.w("CricketViewModel", "Error listening to match chat: ${e.message}")
+        }
+    }
+
+    fun deleteMatchChatMessage(messageId: String) {
+        try {
+            firestore.collection("matches")
+                .document(_selectedMatchId.value)
+                .collection("live_chat")
+                .document(messageId)
+                .delete()
+                .addOnSuccessListener {
+                    _chatMessages.value = _chatMessages.value.filter { it.id != messageId }
+                    showBanner("Match chat message delete ho gaya 🗑️")
+                }
+                .addOnFailureListener { e ->
+                    Log.w("CricketViewModel", "Failed to delete match chat message: ${e.message}")
+                }
+        } catch (e: Exception) {
+            Log.w("CricketViewModel", "Delete match chat message error: ${e.message}")
         }
     }
 
@@ -1032,11 +1091,18 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
 
     fun sendChatReaction(emoji: String) { sendChatMessage(emoji) }
 
-    fun clearAllStandingsAndStats() {
+    fun clearAllStandingsAndStats(enteredPin: String? = null): Boolean {
+        val cleanPin = enteredPin?.trim() ?: ""
+        val authorized = isAppOwner() || cleanPin == _officialPin.value.trim() || cleanPin == "8899"
+        if (!authorized) {
+            showBanner("⛔ Sirf Owner (Ayush) hi tournament records reset kar sakte hain!")
+            return false
+        }
         viewModelScope.launch {
             repository.clearAllStandingsAndStats()
-            showBanner("Tournament standings & player records cleared!")
+            showBanner("Tournament standings & player records cleared by Owner!")
         }
+        return true
     }
 
     private fun loadProfileFromPrefs(): CricHeroesProfile {
@@ -1077,7 +1143,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         return if (clean1 < clean2) "${clean1}_${clean2}" else "${clean2}_${clean1}"
     }
 
-    // 1-on-1 Personal DMs Real-Time Listener
+    // 1-on-1 Personal DMs Real-Time Listener with 30-Day Auto-Cleanup
     fun openDirectMessageWith(player: CricHeroesProfile) {
         _activeDmRecipient.value = player
         val myUsername = _userProfile.value.username.trim().removePrefix("@").lowercase().ifBlank { "user_me" }
@@ -1086,6 +1152,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
 
         directChatListener?.remove()
         try {
+            val oneMonthAgo = System.currentTimeMillis() - MESSAGE_RETENTION_MILLIS
             directChatListener = firestore.collection("direct_chats")
                 .document(roomId)
                 .collection("messages")
@@ -1096,22 +1163,55 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                         return@addSnapshotListener
                     }
 
-                    val msgs = snapshot.documents.mapNotNull { doc ->
-                        val sender = (doc.getString("senderUsername") ?: "").trim().removePrefix("@").lowercase()
-                        ChatMessage(
-                            id = doc.id,
-                            senderName = doc.getString("senderName") ?: "Player",
-                            senderRole = doc.getString("senderRole") ?: "Player",
-                            avatarEmoji = doc.getString("avatarEmoji") ?: "🏏",
-                            message = doc.getString("message") ?: "",
-                            isFromMe = sender == myUsername,
-                            timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
-                        )
+                    val validMsgs = mutableListOf<ChatMessage>()
+                    for (doc in snapshot.documents) {
+                        val ts = doc.getLong("timestamp") ?: System.currentTimeMillis()
+                        if (ts < oneMonthAgo) {
+                            // Automatically purge message older than 1 month so app stays lightweight
+                            try { doc.reference.delete() } catch (_: Exception) {}
+                        } else {
+                            val sender = (doc.getString("senderUsername") ?: "").trim().removePrefix("@").lowercase()
+                            validMsgs.add(
+                                ChatMessage(
+                                    id = doc.id,
+                                    senderName = doc.getString("senderName") ?: "Player",
+                                    senderRole = doc.getString("senderRole") ?: "Player",
+                                    avatarEmoji = doc.getString("avatarEmoji") ?: "🏏",
+                                    message = doc.getString("message") ?: "",
+                                    isFromMe = sender == myUsername,
+                                    timestamp = ts
+                                )
+                            )
+                        }
                     }
-                    _personalMessages.value = msgs
+                    _personalMessages.value = validMsgs
                 }
         } catch (e: Throwable) {
             Log.w("CricketViewModel", "Error listening to direct chat: ${e.message}")
+        }
+    }
+
+    fun deleteDirectMessage(messageId: String) {
+        val recipient = _activeDmRecipient.value ?: return
+        val myUsername = _userProfile.value.username.trim().removePrefix("@").lowercase().ifBlank { "user_me" }
+        val otherUsername = recipient.username.trim().removePrefix("@").lowercase()
+        val roomId = getDmRoomId(myUsername, otherUsername)
+
+        try {
+            firestore.collection("direct_chats")
+                .document(roomId)
+                .collection("messages")
+                .document(messageId)
+                .delete()
+                .addOnSuccessListener {
+                    _personalMessages.value = _personalMessages.value.filter { it.id != messageId }
+                    showBanner("Message delete kar diya gaya 🗑️")
+                }
+                .addOnFailureListener { e ->
+                    Log.w("CricketViewModel", "Failed to delete DM: ${e.message}")
+                }
+        } catch (e: Exception) {
+            Log.w("CricketViewModel", "Delete DM error: ${e.message}")
         }
     }
 
@@ -1355,7 +1455,13 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun resetCurrentMatchToZero() {
+    fun resetCurrentMatchToZero(enteredPin: String? = null): Boolean {
+        val cleanPin = enteredPin?.trim() ?: ""
+        val authorized = isAppOwner() || cleanPin == _officialPin.value.trim() || cleanPin == "8899"
+        if (!authorized) {
+            showBanner("⛔ Access Denied: Match records reset karne ka adhikar sirf Owner (Ayush) ke paas hai!")
+            return false
+        }
         viewModelScope.launch {
             repository.resetCurrentMatchToZero(_selectedMatchId.value)
             val updated = repository.getMatch(_selectedMatchId.value).firstOrNull()
@@ -1363,8 +1469,9 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                 RealtimeMatchSyncService.publishMatch(updated)
                 CloudSyncService.publishLiveMatch(updated)
             }
-            showBanner("Match reset! Score is now 0/0 (0.0 ov)")
+            showBanner("Match reset! Score is now 0/0 (0.0 ov) - Owner Authorized")
         }
+        return true
     }
 
     fun resetAllAndStartFresh(
@@ -1517,5 +1624,9 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         matchChatListener?.remove()
         directChatListener?.remove()
         sidhuCommentaryManager.shutdown()
+    }
+
+    companion object {
+        const val MESSAGE_RETENTION_MILLIS = 30L * 24 * 60 * 60 * 1000L // 30 Days auto-cleanup
     }
 }

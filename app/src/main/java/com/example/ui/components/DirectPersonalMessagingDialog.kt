@@ -46,6 +46,7 @@ fun DirectPersonalMessagingDialog(
     onSelectRecipient: (CricHeroesProfile) -> Unit,
     onCloseChat: () -> Unit,
     onSendMessage: (recipientUsername: String, text: String) -> Unit,
+    onDeleteMessage: ((String) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -443,17 +444,52 @@ fun DirectPersonalMessagingDialog(
                                 }
                             }
                         } else {
+                            item {
+                                Surface(
+                                    color = Color(0xFF1E293B).copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "⏱️ Messages 1 mahine tak rehte hain, uske baad auto-delete ho jate hain taaki app heavy na ho.",
+                                        color = TextMuted,
+                                        fontSize = 10.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+
                             items(activeConversation, key = { it.id }) { msg ->
                                 val isMe = msg.isFromMe || msg.senderUsername.removePrefix("@").equals(
                                     currentUser.username.removePrefix("@"),
                                     ignoreCase = true
                                 )
+                                val isOwner = currentUser.username.removePrefix("@").equals("ayush_7", ignoreCase = true) ||
+                                              currentUser.fullName.lowercase().contains("ayush")
                                 val timeStr = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(msg.timestamp))
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
+                                    horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
+                                    verticalAlignment = Alignment.Bottom
                                 ) {
+                                    if (isMe || isOwner) {
+                                        IconButton(
+                                            onClick = { onDeleteMessage?.invoke(msg.id) },
+                                            modifier = Modifier.size(24.dp).padding(bottom = 4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = "Delete Message",
+                                                tint = Color.Red.copy(alpha = 0.6f),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+
                                     Column(
                                         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start,
                                         modifier = Modifier.widthIn(max = 270.dp)

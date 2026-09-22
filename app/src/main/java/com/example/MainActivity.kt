@@ -679,6 +679,8 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     onSelectRecipient = { viewModel.openDirectMessageWith(it) },
                     onCloseDirectChat = { viewModel.closeDirectMessageChat() },
                     onSendDirectMessage = { recipient, text -> viewModel.sendDirectMessage(recipient, text) },
+                    onDeleteMatchMessage = { viewModel.deleteMatchChatMessage(it) },
+                    onDeleteDirectMessage = { viewModel.deleteDirectMessage(it) },
                     onRefreshUsers = { viewModel.syncCloudUsers() },
                     onDismiss = {
                         viewModel.closeMessagesHub()
