@@ -93,7 +93,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     val playerStats: StateFlow<List<PlayerStatEntity>>
     val notifications: StateFlow<List<NotificationAlertEntity>>
 
-    private val _selectedMatchId = MutableStateFlow("match_live_1")
+    private val _selectedMatchId = MutableStateFlow("")
     val selectedMatchId = _selectedMatchId.asStateFlow()
 
     val currentMatch: StateFlow<MatchEntity?>
@@ -548,13 +548,15 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
 
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         currentMatch = _selectedMatchId.flatMapLatest { id ->
-            repository.getMatch(id)
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, repository.getFallbackMatch())
+            if (id.isBlank()) kotlinx.coroutines.flow.flowOf(null)
+            else repository.getMatch(id)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         currentBallEvents = _selectedMatchId.flatMapLatest { id ->
-            repository.getBallEvents(id)
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, repository.getFallbackBallEvents())
+            if (id.isBlank()) kotlinx.coroutines.flow.flowOf(emptyList())
+            else repository.getBallEvents(id)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         highlightClips = repository.getHighlightClips()
         _selectedClip.value = highlightClips.firstOrNull()
@@ -563,6 +565,34 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             repository.initializeDefaultDataIfEmpty()
             checkPeriodicUpdateReminder()
         }
+
+        // Auto-select latest active match or clear if empty
+        viewModelScope.launch {
+            allMatches.collect { matches ->
+                if (matches.isNotEmpty()) {
+                    val currentExists = matches.any { it.id == _selectedMatchId.value }
+                    if (!currentExists || _selectedMatchId.value.isBlank() || _selectedMatchId.value == "match_live_1") {
+                        val activeOrFirst = matches.firstOrNull { it.status == "LIVE" } ?: matches.firstOrNull()
+                        if (activeOrFirst != null) {
+                            _selectedMatchId.value = activeOrFirst.id
+                        }
+                    }
+                } else {
+                    _selectedMatchId.value = ""
+                }
+            }
+        }
+
+        // Live Score Widget and Push Notification auto-updater
+        viewModelScope.launch {
+            currentMatch.collect { match ->
+                com.example.widget.LiveScoreAppWidgetProvider.updateAllWidgets(application, match)
+                if (match != null && match.status == "LIVE") {
+                    com.example.notification.MatchNotificationHelper.notifyMatchLive(application, match)
+                }
+            }
+        }
+
         listenToMatchChat(_selectedMatchId.value)
 
         // Real-time Firebase match sync for instant cross-device updates & persistent history for new installers
@@ -1450,6 +1480,8 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             if (created != null) {
                 RealtimeMatchSyncService.publishMatch(created)
                 CloudSyncService.publishLiveMatch(created)
+                com.example.notification.MatchNotificationHelper.notifyMatchLive(getApplication(), created, forceNotify = true)
+                com.example.widget.LiveScoreAppWidgetProvider.updateAllWidgets(getApplication(), created)
             }
             showBanner("Match Created! 4 Official Phones can now claim roles with PIN ${_officialPin.value}")
         }

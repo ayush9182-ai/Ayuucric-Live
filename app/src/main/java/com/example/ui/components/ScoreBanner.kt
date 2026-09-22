@@ -299,35 +299,37 @@ fun ScoreBanner(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlinedButton(
                                 onClick = onSwitchStriker,
                                 modifier = Modifier
-                                    .height(22.dp)
+                                    .height(28.dp)
                                     .testTag("switch_striker_btn"),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 5.dp, vertical = 0.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                 shape = RoundedCornerShape(8.dp),
-                                border = androidx.compose.foundation.BorderStroke(0.6.dp, CricketGreen.copy(alpha = 0.6f)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CricketGreen.copy(alpha = 0.7f)),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = CricketGreen)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.SwapHoriz,
                                     contentDescription = "Rotate Strike",
-                                    modifier = Modifier.size(11.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text("Swap", fontSize = 8.5.sp)
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Swap", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
                             }
                             if (onChangeBatsman != null) {
                                 Box(
                                     modifier = Modifier
+                                        .height(28.dp)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(CricketGreen.copy(alpha = 0.15f))
-                                        .border(0.5.dp, CricketGreen.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                        .background(CricketGreen.copy(alpha = 0.18f))
+                                        .border(1.dp, CricketGreen.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                                         .clickable { onChangeBatsman() }
-                                        .padding(horizontal = 5.dp, vertical = 3.dp)
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text("✏️ Edit", fontSize = 8.5.sp, color = CricketGreen, fontWeight = FontWeight.Bold)
+                                    Text("✏️ Edit", fontSize = 10.5.sp, color = CricketGreen, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -416,14 +418,14 @@ fun ScoreBanner(
                         OutlinedButton(
                             onClick = { onChangeBowler?.invoke() },
                             modifier = Modifier
-                                .height(22.dp)
+                                .height(28.dp)
                                 .testTag("change_bowler_btn"),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(0.6.dp, StadiumGold.copy(alpha = 0.6f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, StadiumGold.copy(alpha = 0.8f)),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = StadiumGold)
                         ) {
-                            Text("🎳 Change", fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                            Text("🎳 Change", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))

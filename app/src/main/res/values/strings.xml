@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">AyuuCric Live</string>
+    <string name="widget_name">AyuuCric Live Score Widget</string>
+    <string name="widget_description">Live Cricket Score &amp; Ball-by-Ball Auto Sync Widget</string>
 </resources>

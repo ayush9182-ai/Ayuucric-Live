@@ -60,6 +60,12 @@ interface CricketDao {
     @Query("UPDATE notifications SET isRead = 1")
     suspend fun markAllNotificationsRead()
 
+    @androidx.room.Delete
+    suspend fun deleteMatch(match: MatchEntity)
+
+    @Query("DELETE FROM matches WHERE id = :matchId")
+    suspend fun deleteMatchById(matchId: String)
+
     @Query("DELETE FROM matches")
     suspend fun deleteAllMatches()
 

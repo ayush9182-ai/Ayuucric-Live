@@ -82,8 +82,92 @@ fun LiveCenterTab(
     onChangeBatsman: () -> Unit = {},
     onOpenNewBatsmanDialog: () -> Unit = {}
 ) {
-    val activeMatch = match ?: remember { CricketRepository.sampleMatch }
-    val activeBallEvents = if (ballEvents.isNotEmpty()) ballEvents else remember { CricketRepository.sampleBallEvents }
+    if (match == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp)
+                .testTag("live_center_empty_state"),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = PitchCard),
+                border = BorderStroke(1.2.dp, Color(0xFF334155))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1E293B)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("🏏", fontSize = 32.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Scorecard Khali Hai",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = TextPrimary
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Abhi koi match live nahi chal raha hai.\nOfficial Scorer naya match banayega toh live scorecard aur commentary yahan auto-update honge!",
+                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 18.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Button(
+                        onClick = onOpenRoleDialog,
+                        colors = ButtonDefaults.buttonColors(containerColor = StadiumGold, contentColor = PitchDark),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = PitchDark)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("START NEW MATCH", fontWeight = FontWeight.Black, fontSize = 13.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = onOpenMessagesHub,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFF475569)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Chat, contentDescription = null, tint = CricketGreen)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Fan Chat & Messages 💬", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    val activeMatch = match
+    val activeBallEvents = ballEvents
 
     Box(
         modifier = Modifier
@@ -634,17 +718,20 @@ private fun ScoringPillButton(
 ) {
     Box(
         modifier = modifier
-            .height(34.dp)
+            .height(38.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(color)
-            .clickable { onClick() },
+            .clickable { onClick() }
+            .padding(horizontal = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Black,
-            color = textColor
+            color = textColor,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -679,23 +766,25 @@ private fun UmpireContextualDock(
                 onClick = onOpenUmpireCamera,
                 colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
                 shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                 modifier = Modifier
                     .weight(1.2f)
-                    .height(34.dp)
+                    .height(38.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.CameraAlt,
                     contentDescription = null,
                     tint = PitchDark,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "Cam View",
-                    fontSize = 11.sp,
+                    fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = PitchDark
+                    color = PitchDark,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
 
@@ -704,16 +793,18 @@ private fun UmpireContextualDock(
                 onClick = { onTriggerAppeal("LBW") },
                 border = BorderStroke(1.dp, StadiumGold),
                 shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(34.dp)
+                    .height(38.dp)
             ) {
                 Text(
-                    text = "LBW Appeal",
-                    fontSize = 10.sp,
+                    text = "LBW Check",
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = StadiumGold
+                    color = StadiumGold,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
 
@@ -722,16 +813,18 @@ private fun UmpireContextualDock(
                 onClick = { onTriggerAppeal("EDGE") },
                 border = BorderStroke(1.dp, HawkEyeCyan),
                 shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(34.dp)
+                    .height(38.dp)
             ) {
                 Text(
-                    text = "Edge Check",
-                    fontSize = 10.sp,
+                    text = "UltraEdge",
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = HawkEyeCyan
+                    color = HawkEyeCyan,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
 
@@ -739,7 +832,7 @@ private fun UmpireContextualDock(
             IconButton(
                 onClick = onOpenDrsReview,
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF1E293B))
             ) {
@@ -747,7 +840,7 @@ private fun UmpireContextualDock(
                     imageVector = Icons.Default.Policy,
                     contentDescription = "DRS",
                     tint = Color(0xFFA78BFA),
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

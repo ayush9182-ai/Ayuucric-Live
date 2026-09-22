@@ -14,6 +14,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -95,7 +96,7 @@ fun LiveMatchesFeedScreen(
     var selectedFilter by remember { mutableStateOf("LIVE") } // "LIVE", "ALL", "COMPLETED"
 
     val filteredMatches = when (selectedFilter) {
-        "LIVE" -> matches.filter { it.status == "LIVE" }.ifEmpty { matches }
+        "LIVE" -> matches.filter { it.status == "LIVE" }
         "COMPLETED" -> matches.filter { it.status != "LIVE" }
         else -> matches
     }
@@ -312,6 +313,50 @@ fun LiveMatchesFeedScreen(
         }
 
         // Live Matches List
+        if (filteredMatches.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = PitchCard),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(text = "🏏", fontSize = 38.sp)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = if (selectedFilter == "LIVE") "Abhi Koi Match Live Nahi Hai" else "Koi Match Records Nahi Hai",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (selectedFilter == "LIVE") "Scorer live match shuru karega toh yahan scorecard aur stream dikhegi." else "Aap naya match shuru karke ball-by-ball record kar sakte hain.",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = { onCreateNewMatch() },
+                            colors = ButtonDefaults.buttonColors(containerColor = StadiumGold, contentColor = PitchDark),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("START NEW MATCH ➕", fontWeight = FontWeight.Black, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
         items(filteredMatches, key = { it.id }) { match ->
             val isSelected = match.id == selectedMatchId
             val isLive = match.status == "LIVE"
@@ -591,8 +636,11 @@ fun LiveMatchesFeedScreen(
                     ) {
                         Button(
                             onClick = { onWatchLiveVideoAndScore(match.id) },
-                            modifier = Modifier.weight(1.3f),
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .height(40.dp),
                             shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (hasVideoActive) DrsOutRed else CricketGreen
                             )
@@ -605,17 +653,22 @@ fun LiveMatchesFeedScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (hasVideoActive) "Watch Video + Score" else "Live Match Center",
+                                text = if (hasVideoActive) "Video & Score" else "Match Center",
                                 color = if (hasVideoActive) Color.White else PitchDark,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
                         OutlinedButton(
                             onClick = { onOpenFullScorecard(match.id) },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp),
                             shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF475569))
                         ) {
                             Icon(
@@ -628,8 +681,10 @@ fun LiveMatchesFeedScreen(
                             Text(
                                 text = "Scorecard",
                                 color = TextPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 

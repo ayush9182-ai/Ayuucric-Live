@@ -247,7 +247,7 @@ fun TopBroadcastHeader(
                             val scoreStr = "${match.score}/${match.wickets} (${match.legalBalls / 6}.${match.legalBalls % 6} ov)"
                             "${match.teamAShort} vs ${match.teamBShort} • ${match.status} • $scoreStr"
                         } else {
-                            "Select Match Fixture"
+                            "No Match Live • Tap to Select / Create 🏏"
                         }
 
                         Text(
@@ -262,15 +262,15 @@ fun TopBroadcastHeader(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Quick 1-Tap Share APK Button (Direct APK Share without USB)
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
+                                .size(30.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF6366F1).copy(alpha = 0.2f))
-                                .border(0.8.dp, Color(0xFF6366F1), CircleShape)
+                                .background(Color(0xFF6366F1).copy(alpha = 0.25f))
+                                .border(1.dp, Color(0xFF818CF8), CircleShape)
                                 .clickable { ApkShareHelper.shareInstalledApk(context) },
                             contentAlignment = Alignment.Center
                         ) {
@@ -278,17 +278,17 @@ fun TopBroadcastHeader(
                                 imageVector = Icons.Default.Android,
                                 contentDescription = "Share App APK",
                                 tint = Color(0xFFA5B4FC),
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
 
                         // Quick 1-Tap WhatsApp Share Poster
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
+                                .size(30.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF25D366).copy(alpha = 0.2f))
-                                .border(0.8.dp, Color(0xFF25D366), CircleShape)
+                                .background(Color(0xFF25D366).copy(alpha = 0.25f))
+                                .border(1.dp, Color(0xFF25D366), CircleShape)
                                 .clickable { onShareWhatsApp() },
                             contentAlignment = Alignment.Center
                         ) {
@@ -296,17 +296,17 @@ fun TopBroadcastHeader(
                                 imageVector = Icons.Default.Share,
                                 contentDescription = "Share WhatsApp",
                                 tint = Color(0xFF25D366),
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                         }
 
                         // Quick 1-Tap Wagon Wheel Radar
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
+                                .size(30.dp)
                                 .clip(CircleShape)
-                                .background(HawkEyeCyan.copy(alpha = 0.2f))
-                                .border(0.8.dp, HawkEyeCyan, CircleShape)
+                                .background(HawkEyeCyan.copy(alpha = 0.25f))
+                                .border(1.dp, HawkEyeCyan, CircleShape)
                                 .clickable { onOpenWagonWheel() },
                             contentAlignment = Alignment.Center
                         ) {
@@ -314,7 +314,7 @@ fun TopBroadcastHeader(
                                 imageVector = Icons.Default.TrackChanges,
                                 contentDescription = "Wagon Wheel Radar",
                                 tint = HawkEyeCyan,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
 

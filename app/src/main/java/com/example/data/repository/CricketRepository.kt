@@ -23,30 +23,22 @@ class CricketRepository(private val dao: CricketDao) {
     fun getMatch(matchId: String): Flow<MatchEntity?> = dao.getMatchById(matchId)
     fun getBallEvents(matchId: String): Flow<List<BallEventEntity>> = dao.getBallEventsForMatch(matchId)
 
-    fun getFallbackMatches(): List<MatchEntity> = listOf(sampleMatch)
-    fun getFallbackMatch(id: String = "match_live_1"): MatchEntity = sampleMatch
-    fun getFallbackBallEvents(id: String = "match_live_1"): List<BallEventEntity> = sampleBallEvents
+    fun getFallbackMatches(): List<MatchEntity> = emptyList()
+    fun getFallbackMatch(id: String = ""): MatchEntity? = null
+    fun getFallbackBallEvents(id: String = ""): List<BallEventEntity> = emptyList()
 
     suspend fun initializeDefaultDataIfEmpty() {
         val existingMatches = dao.getAllMatches().first()
-        if (existingMatches.isEmpty()) {
-            val initialMatches = listOf(sampleMatch)
-            dao.insertMatches(initialMatches)
+        // Clean out any pre-existing template dummy match so scorecard and live feed start clean
+        val dummyMatches = existingMatches.filter { it.id == "match_live_1" && it.teamA == "Team A" && it.legalBalls == 0 }
+        dummyMatches.forEach {
+            dao.deleteMatch(it)
+            dao.deleteBallEventsForMatch(it.id)
         }
 
         // Clean out any pre-existing dummy records so table and stats start completely clean
         dao.deleteAllStandings()
         dao.deleteAllPlayerStats()
-
-        // Seed Notifications
-        val seedNotifications = listOf(
-            NotificationAlertEntity(
-                title = "Match Alert: Live Match Ready! 🏏",
-                message = "Scorecard initialized and ready for ball-by-ball recording.",
-                type = "MATCH_STATUS"
-            )
-        )
-        seedNotifications.forEach { dao.insertNotification(it) }
     }
 
     suspend fun clearAllStandingsAndStats() {
