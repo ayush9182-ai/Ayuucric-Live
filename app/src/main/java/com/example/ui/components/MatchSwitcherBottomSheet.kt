@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalContext
 import com.example.data.model.MatchEntity
 import com.example.ui.theme.*
+import com.example.util.ApkShareHelper
 
 /**
  * Compact Match Switcher & Unified Management Sheet.
@@ -49,6 +51,8 @@ fun MatchSwitcherBottomSheet(
     onOpenAiSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -199,14 +203,13 @@ fun MatchSwitcherBottomSheet(
                         }
                     )
                     QuickActionCard(
-                        icon = Icons.Default.MenuBook,
-                        title = "Guide",
-                        subtitle = "App Tutorial",
-                        tint = Color(0xFF60A5FA),
+                        icon = Icons.Default.Share,
+                        title = "Share APK",
+                        subtitle = "Send to Friends",
+                        tint = Color(0xFF22C55E),
                         modifier = Modifier.weight(1f),
                         onClick = {
-                            onDismiss()
-                            onOpenGuide()
+                            ApkShareHelper.shareInstalledApk(context)
                         }
                     )
                 }

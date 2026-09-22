@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,6 +27,7 @@ import com.example.data.model.DeviceRole
 import com.example.data.model.MatchEntity
 import com.example.data.network.NetworkStatus
 import com.example.ui.theme.*
+import com.example.util.ApkShareHelper
 
 /**
  * Streamlined Top Broadcast Header (Maximum 4 Focus Elements)
@@ -48,6 +50,7 @@ fun TopBroadcastHeader(
     onShareWhatsApp: () -> Unit = {},
     onOpenWagonWheel: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     Surface(
         color = PitchSurface,
         border = BorderStroke(0.5.dp, Color(0xFF1E293B)),
@@ -261,6 +264,24 @@ fun TopBroadcastHeader(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        // Quick 1-Tap Share APK Button (Direct APK Share without USB)
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF6366F1).copy(alpha = 0.2f))
+                                .border(0.8.dp, Color(0xFF6366F1), CircleShape)
+                                .clickable { ApkShareHelper.shareInstalledApk(context) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Android,
+                                contentDescription = "Share App APK",
+                                tint = Color(0xFFA5B4FC),
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+
                         // Quick 1-Tap WhatsApp Share Poster
                         Box(
                             modifier = Modifier

@@ -16,6 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.MatchEntity
+import com.example.data.model.parseDismissedBatsmen
 import com.example.ui.theme.CricketGreen
 import com.example.ui.theme.HawkEyeCyan
 import com.example.ui.theme.PitchCard
@@ -90,7 +92,7 @@ fun DetailedScorecardView(
                 val strikerSr = if (match.strikerBalls > 0) String.format("%.1f", (match.strikerRuns.toFloat() / match.strikerBalls) * 100) else "0.0"
                 BatterScorecardRow(
                     name = "${match.strikerName}*",
-                    dismissal = "not out",
+                    dismissal = "batting (on strike)",
                     runs = match.strikerRuns,
                     balls = match.strikerBalls,
                     fours = match.strikerFours,
@@ -103,7 +105,7 @@ fun DetailedScorecardView(
                 val nonStrikerSr = if (match.nonStrikerBalls > 0) String.format("%.1f", (match.nonStrikerRuns.toFloat() / match.nonStrikerBalls) * 100) else "0.0"
                 BatterScorecardRow(
                     name = match.nonStrikerName,
-                    dismissal = "not out",
+                    dismissal = "batting (non-strike)",
                     runs = match.nonStrikerRuns,
                     balls = match.nonStrikerBalls,
                     fours = match.nonStrikerFours,
@@ -112,17 +114,57 @@ fun DetailedScorecardView(
                     isNotOut = true
                 )
 
+                // Dismissed Batsmen (Record of all batsmen who got out)
+                val dismissedList = remember(match.dismissedBatsmenJson) {
+                    parseDismissedBatsmen(match.dismissedBatsmenJson)
+                }
+
+                if (dismissedList.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF0F172A).copy(alpha = 0.6f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "DISMISSED BATSMEN (${dismissedList.size})",
+                            color = Color(0xFFEF4444),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    dismissedList.forEach { batsman ->
+                        val sr = if (batsman.balls > 0) {
+                            String.format("%.1f", (batsman.runs.toFloat() / batsman.balls) * 100)
+                        } else "0.0"
+                        BatterScorecardRow(
+                            name = batsman.name,
+                            dismissal = batsman.dismissal,
+                            runs = batsman.runs,
+                            balls = batsman.balls,
+                            fours = batsman.fours,
+                            sixes = batsman.sixes,
+                            sr = batsman.strikeRate.ifBlank { sr },
+                            isNotOut = false
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Extras & Total
+                val dismissedRunsTotal = dismissedList.sumOf { it.runs }
+                val batRunsTotal = match.strikerRuns + match.nonStrikerRuns + dismissedRunsTotal
+                val extrasTotal = (match.score - batRunsTotal).coerceAtLeast(0)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Extras (w 4, nb 1, lb 2)", color = TextSecondary, fontSize = 11.sp)
-                    Text("7", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Extras (wides, no-balls, byes)", color = TextSecondary, fontSize = 11.sp)
+                    Text("$extrasTotal", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Row(
@@ -135,6 +177,17 @@ fun DetailedScorecardView(
                 ) {
                     Text("TOTAL (${match.wickets} wkts, ${match.legalBalls / 6}.${match.legalBalls % 6} Ov)", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Black)
                     Text("${match.score}", color = CricketGreen, fontSize = 13.sp, fontWeight = FontWeight.Black)
+                }
+
+                if (dismissedList.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Fall of Wickets: " + dismissedList.mapIndexed { idx, b -> "${idx + 1}-${b.runs} (${b.name})" }.joinToString(", "),
+                        color = TextSecondary,
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
                 }
             }
         }

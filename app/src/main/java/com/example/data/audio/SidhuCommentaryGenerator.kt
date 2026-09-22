@@ -185,74 +185,85 @@ object SidhuCommentaryGenerator {
         val isLegBye = ball.extraType.equals("LegBye", ignoreCase = true) || ball.extraType.equals("LB", ignoreCase = true)
         val isBye = ball.extraType.equals("Bye", ignoreCase = true) || ball.extraType.equals("B", ignoreCase = true)
 
+        val scoreVoice = if (currentScore.contains("/")) {
+            val parts = currentScore.split("/")
+            val r = parts.getOrNull(0)?.trim() ?: "0"
+            val w = parts.getOrNull(1)?.trim() ?: "0"
+            "$r run, $w wicket"
+        } else if (!currentScore.contains("run", ignoreCase = true)) {
+            "$currentScore run"
+        } else {
+            currentScore
+        }
+
         return when {
             // Wicket dismissal
             ball.isWicket -> {
                 val metaphor = pickFresh(wicketsMetaphors)
-                "$opener $styleBonus $bowler ne $batsman ko pavilion bhej diya! $metaphor Score hai $currentScore! $closer"
+                "$opener $styleBonus $bowler ne $batsman ko pavilion bhej diya! $metaphor Score hai $scoreVoice! $closer"
             }
             // No-Ball deliveries (Overstepping / Above waist)
             isGenuineNoBall -> {
                 when {
                     ball.runs >= 6 || ball.isSix -> {
                         val dialogues = listOf(
-                            "$opener Oye chak de phatte guru! No-ball par gagan-chumbi aasmaani chhakka! Kul 7 run mil gaye aur ab agli gend par Free Hit bhi milegi! Ballebaaz ki lottery lag gayi! Score $currentScore! $closer",
-                            "$opener Arey baap re baap! Chhakka aur No-ball dono ek sath guru! Free hit ka inaam aur 7 run khate mein! Score $currentScore! $closer"
+                            "$opener Oye chak de phatte guru! No-ball par gagan-chumbi aasmaani chhakka! Kul 7 run mil gaye aur ab agli gend par Free Hit bhi milegi! Ballebaaz ki lottery lag gayi! Score $scoreVoice! $closer",
+                            "$opener Arey baap re baap! Chhakka aur No-ball dono ek sath guru! Free hit ka inaam aur 7 run khate mein! Score $scoreVoice! $closer"
                         )
                         pickFresh(dialogues)
                     }
                     ball.runs == 4 -> {
-                        "$opener No-ball aur sath mein karara chauka! 5 run mil gaye aur agle ball par Free Hit ka bumper offer! Score $currentScore! $closer"
+                        "$opener No-ball aur sath mein karara chauka! 5 run mil gaye aur agle ball par Free Hit ka bumper offer! Score $scoreVoice! $closer"
                     }
                     ball.runs > 0 -> {
-                        "$opener No-ball! Ballebaaz ne daud kar ${ball.runs} run bhi liye! Kul ${ball.runs + 1} run khate mein aur agle ball par Free Hit! Score $currentScore."
+                        "$opener No-ball! Ballebaaz ne daud kar ${ball.runs} run bhi liye! Kul ${ball.runs + 1} run khate mein aur agle ball par Free Hit! Score $scoreVoice."
                     }
                     else -> {
-                        "$opener Bowler ne crease overstep kar di, No-ball ka ishaara! Batting team ko 1 run aur agli ball par Free Hit! Score $currentScore."
+                        "$opener Bowler ne crease overstep kar di, No-ball ka ishaara! Batting team ko 1 run aur agli ball par Free Hit! Score $scoreVoice."
                     }
                 }
             }
             // Wide deliveries
             isWide -> {
                 if (ball.runs > 0) {
-                    "$opener Wide ball aur sath mein ${ball.runs} extra run! Kul ${ball.runs + 1} run batting team ke khate mein! Score $currentScore."
+                    "$opener Wide ball aur sath mein ${ball.runs} extra run! Kul ${ball.runs + 1} run batting team ke khate mein! Score $scoreVoice."
                 } else {
                     val metaphor = pickFresh(extrasMetaphors)
-                    "$opener $bowler ki taraf se Wide ball! $metaphor Free fund ka 1 run mila, Score $currentScore!"
+                    "$opener $bowler ki taraf se Wide ball! $metaphor Free fund ka 1 run mila, Score $scoreVoice!"
                 }
             }
             // Byes / Leg Byes
             isLegBye || isBye -> {
                 val label = if (isLegBye) "Leg-bye" else "Bye"
-                "$opener Bat par nahi lagi, $label ke roop mein ${if (ball.runs > 0) "${ball.runs} run" else "1 run"} bator liye! Score $currentScore."
+                "$opener Bat par nahi lagi, $label ke roop mein ${if (ball.runs > 0) "${ball.runs} run" else "1 run"} bator liye! Score $scoreVoice."
             }
             // Legal deliveries off the bat
             ball.runs == 6 -> {
                 val metaphor = pickFresh(sixesMetaphors)
-                "$opener $styleBonus $batsman ke bat se nikla chhakka! $metaphor Score pahuncha $currentScore! $closer"
+                "$opener $styleBonus $batsman ke bat se nikla chhakka! $metaphor Score pahuncha $scoreVoice! $closer"
             }
             ball.runs == 4 -> {
                 val metaphor = pickFresh(foursMetaphors)
-                "$opener $styleBonus $batsman ne jad diya lajawab chauka! $metaphor Score $currentScore! $closer"
+                "$opener $styleBonus $batsman ne jad diya lajawab chauka! $metaphor Score $scoreVoice! $closer"
             }
             ball.runs == 3 -> {
-                "$opener Shandar running between the wickets! $batsman ne 3 run tezi se daud kar pure kiye! Score $currentScore."
+                "$opener Shandar running between the wickets! $batsman ne 3 run tezi se daud kar pure kiye! Score $scoreVoice."
             }
             ball.runs == 2 -> {
                 val metaphor = pickFresh(doublesMetaphors)
-                "$opener $batsman ne $bowler ki gend par do run churaye! $metaphor Score $currentScore."
+                "$opener $batsman ne $bowler ki gend par do run churaye! $metaphor Score $scoreVoice."
             }
             ball.runs == 1 -> {
                 val metaphor = pickFresh(singlesMetaphors)
-                "$batsman ne ek run liya. $metaphor Score $currentScore."
+                "$batsman ne ek run liya. $metaphor Score $scoreVoice."
             }
             ball.extraType?.isNotEmpty() == true && ball.extraType != "None" -> {
                 val metaphor = pickFresh(extrasMetaphors)
-                "$opener $bowler ki taraf se $metaphor Score $currentScore!"
+                "$opener $bowler ki taraf se $metaphor Score $scoreVoice!"
             }
             else -> {
                 val metaphor = pickFresh(dotsMetaphors)
-                "$bowler ki kassi hui delivery! $metaphor Score $currentScore par kayam."
+                "$bowler ki kassi hui delivery! $metaphor Score $scoreVoice par kayam."
             }
         }
     }

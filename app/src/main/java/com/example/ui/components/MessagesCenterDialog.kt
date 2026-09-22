@@ -38,12 +38,6 @@ import com.example.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-/**
- * Unified commercial-grade Messages Hub consolidating:
- *  1. Live Match Room Chat (Fans & Spectators)
- *  2. 1-on-1 Personal DMs (Cricketers, Umpires & Scorers)
- * Driven 100% by real Firebase Firestore snapshots.
- */
 @Composable
 fun MessagesCenterDialog(
     initialTab: Int = 0,
@@ -78,7 +72,6 @@ fun MessagesCenterDialog(
             tonalElevation = 12.dp
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top Header Bar with Close & Segmented 2-Tab Switch
                 MessagesHeaderBar(
                     selectedTab = selectedTab,
                     onSelectTab = {
@@ -93,7 +86,6 @@ fun MessagesCenterDialog(
 
                 HorizontalDivider(color = Color(0xFF1E293B), thickness = 1.dp)
 
-                // Tab Content Switcher
                 Box(modifier = Modifier.weight(1f)) {
                     if (selectedTab == 0) {
                         MatchLiveRoomChatPane(
@@ -135,7 +127,6 @@ private fun MessagesHeaderBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Segmented Tab Switcher (Match Live vs Personal DMs)
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -145,15 +136,13 @@ private fun MessagesHeaderBar(
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Tab 0: Match Live Room
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(9.dp))
                     .background(
-                        if (selectedTab == 0) {
-                            Brush.linearGradient(listOf(Color(0xFFE1306C), Color(0xFFFD1D1D)))
-                        } else androidx.compose.ui.graphics.SolidColor(Color.Transparent)
+                        if (selectedTab == 0) Brush.linearGradient(listOf(Color(0xFFE1306C), Color(0xFFFD1D1D)))
+                        else androidx.compose.ui.graphics.SolidColor(Color.Transparent)
                     )
                     .clickable { onSelectTab(0) }
                     .padding(vertical = 7.dp),
@@ -168,27 +157,16 @@ private fun MessagesHeaderBar(
                         fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
                         color = if (selectedTab == 0) Color.White else TextSecondary
                     )
-                    if (matchChatCount > 0 && selectedTab != 0) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFE1306C))
-                        )
-                    }
                 }
             }
 
-            // Tab 1: Personal DMs
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(9.dp))
                     .background(
-                        if (selectedTab == 1) {
-                            Brush.linearGradient(listOf(CricketGreen, Color(0xFF007E33)))
-                        } else androidx.compose.ui.graphics.SolidColor(Color.Transparent)
+                        if (selectedTab == 1) Brush.linearGradient(listOf(CricketGreen, Color(0xFF007E33)))
+                        else androidx.compose.ui.graphics.SolidColor(Color.Transparent)
                     )
                     .clickable { onSelectTab(1) }
                     .padding(vertical = 7.dp),
@@ -214,7 +192,6 @@ private fun MessagesHeaderBar(
 
         Spacer(modifier = Modifier.width(10.dp))
 
-        // Close Button
         IconButton(
             onClick = onDismiss,
             modifier = Modifier.size(32.dp)
@@ -247,7 +224,6 @@ private fun MatchLiveRoomChatPane(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Room Subheader Banner
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -284,7 +260,6 @@ private fun MatchLiveRoomChatPane(
             }
         }
 
-        // Messages List
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -292,39 +267,11 @@ private fun MatchLiveRoomChatPane(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (messages.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🏏", fontSize = 32.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Live Ground Fan Chat",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = "Be the first to cheer for your team!",
-                                fontSize = 11.sp,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-
             items(messages, key = { it.id }) { msg ->
                 LiveChatMessageBubble(msg = msg)
             }
         }
 
-        // Quick Reactions Strip
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -344,7 +291,6 @@ private fun MatchLiveRoomChatPane(
             }
         }
 
-        // Input Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -356,9 +302,7 @@ private fun MatchLiveRoomChatPane(
                 value = textInput,
                 onValueChange = { textInput = it },
                 placeholder = { Text("Comment on the live match...", fontSize = 12.sp, color = TextMuted) },
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("match_chat_input"),
+                modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(20.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color(0xFFE1306C),
@@ -372,7 +316,7 @@ private fun MatchLiveRoomChatPane(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = {
                     if (textInput.isNotBlank()) {
-                        onSendMessage(textInput)
+                        onSendMessage(textInput.trim())
                         textInput = ""
                     }
                 })
@@ -383,7 +327,7 @@ private fun MatchLiveRoomChatPane(
             IconButton(
                 onClick = {
                     if (textInput.isNotBlank()) {
-                        onSendMessage(textInput)
+                        onSendMessage(textInput.trim())
                         textInput = ""
                     }
                 },
@@ -391,9 +335,8 @@ private fun MatchLiveRoomChatPane(
                     .size(42.dp)
                     .clip(CircleShape)
                     .background(
-                        if (textInput.isNotBlank()) {
-                            Brush.linearGradient(listOf(Color(0xFFE1306C), Color(0xFFFD1D1D)))
-                        } else Brush.linearGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
+                        if (textInput.isNotBlank()) Brush.linearGradient(listOf(Color(0xFFE1306C), Color(0xFFFD1D1D)))
+                        else Brush.linearGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
                     )
             ) {
                 Icon(
@@ -462,11 +405,8 @@ private fun LiveChatMessageBubble(msg: ChatMessage) {
                         )
                     )
                     .background(
-                        if (msg.isFromMe) {
-                            Brush.linearGradient(listOf(Color(0xFF007E33), CricketGreen))
-                        } else {
-                            Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF0F172A)))
-                        }
+                        if (msg.isFromMe) Brush.linearGradient(listOf(Color(0xFF007E33), CricketGreen))
+                        else Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF0F172A)))
                     )
                     .border(
                         0.5.dp,
@@ -519,7 +459,6 @@ private fun PersonalDmsPane(
     onRefreshUsers: () -> Unit = {}
 ) {
     if (activeRecipient == null) {
-        // Inbox Directory
         DmRosterInbox(
             currentUser = currentUser,
             players = communityPlayers,
@@ -527,7 +466,6 @@ private fun PersonalDmsPane(
             onRefresh = onRefreshUsers
         )
     } else {
-        // 1-on-1 Direct Chat Thread
         DmChatConversation(
             currentUser = currentUser,
             recipient = activeRecipient,
@@ -550,31 +488,21 @@ private fun DmRosterInbox(
         val q = query.trim().lowercase()
         val cleanQ = q.removePrefix("@")
         players.filter {
-            it.username != currentUser.username &&
+            it.username.removePrefix("@").trim().lowercase() != currentUser.username.removePrefix("@").trim().lowercase() &&
             (cleanQ.isEmpty() ||
              it.fullName.lowercase().contains(q) ||
              it.username.lowercase().contains(cleanQ) ||
              it.id.lowercase().contains(cleanQ) ||
-             it.mobileNumber.contains(cleanQ) ||
-             it.jerseyName.lowercase().contains(q) ||
-             it.teamName.lowercase().contains(q))
+             it.jerseyName.lowercase().contains(q))
         }
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-        // Search Input
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search by ID, @username, name or phone...", fontSize = 12.sp, color = TextMuted) },
+            placeholder = { Text("Search by ID, @username, or name...", fontSize = 12.sp, color = TextMuted) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp)) },
-            trailingIcon = {
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { query = "" }) {
-                        Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextMuted, modifier = Modifier.size(14.dp))
-                    }
-                }
-            },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             singleLine = true,
@@ -596,143 +524,70 @@ private fun DmRosterInbox(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "LIVE CLOUD NETWORK (${filtered.size})",
+                text = "ONLINE PLAYERS (${filtered.size})",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextMuted,
                 letterSpacing = 1.sp
             )
-            TextButton(
-                onClick = onRefresh,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Sync Cloud",
-                    tint = CricketGreen,
-                    modifier = Modifier.size(12.dp)
-                )
+            TextButton(onClick = onRefresh) {
+                Icon(Icons.Default.Refresh, contentDescription = null, tint = CricketGreen, modifier = Modifier.size(12.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(text = "Sync Cloud", fontSize = 10.sp, color = CricketGreen)
+                Text("Refresh", fontSize = 10.sp, color = CricketGreen)
             }
         }
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        if (filtered.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(20.dp)
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            items(filtered, key = { it.username }) { player ->
+                Surface(
+                    color = Color(0xFF0F172A),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(0.5.dp, Color(0xFF1E293B)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(player) }
                 ) {
-                    Text(text = "🔍", fontSize = 32.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (query.isNotBlank()) "No player found for \"$query\"" else "No other cricketers online yet",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Once another phone logs in or creates an ID, tap 'Sync Cloud' to discover them instantly.",
-                        fontSize = 11.sp,
-                        color = TextMuted,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = onRefresh,
-                        colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
-                        shape = RoundedCornerShape(10.dp)
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, tint = PitchDark, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Refresh Cloud Network", fontSize = 11.sp, color = PitchDark, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(filtered, key = { it.id.ifBlank { it.username } }) { player ->
-                    Surface(
-                        color = Color(0xFF0F172A),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(0.5.dp, Color(0xFF1E293B)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(player) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E293B)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF1E293B)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(player.avatarEmoji.ifBlank { "🏏" }, fontSize = 18.sp)
-                                if (player.isOnline) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF22C55E))
-                                            .align(Alignment.BottomEnd)
-                                    )
-                                }
-                            }
+                            Text(player.avatarEmoji.ifBlank { "🏏" }, fontSize = 18.sp)
+                        }
 
-                            Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = player.fullName.ifBlank { player.jerseyName },
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "@${player.username}",
-                                        fontSize = 10.sp,
-                                        color = HawkEyeCyan
-                                    )
-                                }
-                                val subText = buildString {
-                                    append(player.primaryRole)
-                                    if (player.teamName.isNotBlank()) append(" • ${player.teamName}")
-                                    if (player.mobileNumber.isNotBlank()) append(" • 📞 ${player.mobileNumber.takeLast(4).padStart(10, '*')}")
-                                }
-                                Text(
-                                    text = subText,
-                                    fontSize = 10.sp,
-                                    color = TextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            Icon(
-                                imageVector = Icons.Default.Chat,
-                                contentDescription = "Message",
-                                tint = CricketGreen,
-                                modifier = Modifier.size(16.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = player.fullName.ifBlank { player.jerseyName },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = "@${player.username.removePrefix("@")}",
+                                fontSize = 10.sp,
+                                color = HawkEyeCyan
                             )
                         }
+
+                        Icon(
+                            imageVector = Icons.Default.Chat,
+                            contentDescription = "Message",
+                            tint = CricketGreen,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
@@ -758,7 +613,6 @@ private fun DmChatConversation(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Conversation Top Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -769,7 +623,7 @@ private fun DmChatConversation(
             IconButton(onClick = onBack, modifier = Modifier.size(32.dp)) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back to Inbox",
+                    contentDescription = "Back",
                     tint = TextPrimary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -795,14 +649,13 @@ private fun DmChatConversation(
                     color = TextPrimary
                 )
                 Text(
-                    text = "@${recipient.username} • Direct Message",
+                    text = "@${recipient.username.removePrefix("@")} • Direct Message",
                     fontSize = 9.sp,
                     color = CricketGreen
                 )
             }
         }
 
-        // Messages List
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -810,39 +663,11 @@ private fun DmChatConversation(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (messages.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 50.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("💬", fontSize = 32.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Start Direct Conversation",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = "Real-time, private, cloud-persisted chat.",
-                                fontSize = 11.sp,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-
             items(messages, key = { it.id }) { msg ->
                 LiveChatMessageBubble(msg = msg)
             }
         }
 
-        // Input Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -853,10 +678,8 @@ private fun DmChatConversation(
             OutlinedTextField(
                 value = textInput,
                 onValueChange = { textInput = it },
-                placeholder = { Text("Message @${recipient.username}...", fontSize = 12.sp, color = TextMuted) },
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("dm_chat_input"),
+                placeholder = { Text("Message @${recipient.username.removePrefix("@")}...", fontSize = 12.sp, color = TextMuted) },
+                modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(20.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = CricketGreen,
@@ -870,7 +693,7 @@ private fun DmChatConversation(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = {
                     if (textInput.isNotBlank()) {
-                        onSendMessage(recipient.username, textInput)
+                        onSendMessage(recipient.username.removePrefix("@").trim(), textInput.trim())
                         textInput = ""
                     }
                 })
@@ -881,7 +704,7 @@ private fun DmChatConversation(
             IconButton(
                 onClick = {
                     if (textInput.isNotBlank()) {
-                        onSendMessage(recipient.username, textInput)
+                        onSendMessage(recipient.username.removePrefix("@").trim(), textInput.trim())
                         textInput = ""
                     }
                 },
@@ -889,9 +712,8 @@ private fun DmChatConversation(
                     .size(42.dp)
                     .clip(CircleShape)
                     .background(
-                        if (textInput.isNotBlank()) {
-                            Brush.linearGradient(listOf(CricketGreen, Color(0xFF007E33)))
-                        } else Brush.linearGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
+                        if (textInput.isNotBlank()) Brush.linearGradient(listOf(CricketGreen, Color(0xFF007E33)))
+                        else Brush.linearGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
                     )
             ) {
                 Icon(

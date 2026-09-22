@@ -18,7 +18,7 @@ import com.example.data.model.TeamStandingEntity
         PlayerStatEntity::class,
         NotificationAlertEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class CricketDatabase : RoomDatabase() {

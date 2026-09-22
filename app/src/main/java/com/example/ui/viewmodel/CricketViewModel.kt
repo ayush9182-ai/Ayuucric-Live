@@ -1,10 +1,26 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.ai.AiEngineMode
+import com.example.data.ai.AiMatchSummarizer
+import com.example.data.ai.AiSettingsManager
+import com.example.data.ai.MatchSummaryResult
+import com.example.data.audio.AiSidhuCommentaryManager
+import com.example.data.audio.SidhuCommentaryGenerator
+import com.example.data.audio.SidhuVoiceStyle
+import com.example.data.audio.StadiumSoundManager
+import com.example.data.chat.RealChatRepository
+import com.example.data.cloud.CloudSyncService
+import com.example.data.firebase.RealtimeMatchSyncService
 import com.example.data.local.CricketDatabase
 import com.example.data.model.BallEventEntity
+import com.example.data.model.BroadcastOverlayEvent
+import com.example.data.model.ChatMessage
+import com.example.data.model.CricHeroesProfile
 import com.example.data.model.DeviceRole
 import com.example.data.model.DrsBroadcastAlert
 import com.example.data.model.DrsReviewState
@@ -12,44 +28,27 @@ import com.example.data.model.HighlightClip
 import com.example.data.model.MatchEntity
 import com.example.data.model.NotificationAlertEntity
 import com.example.data.model.PlayerStatEntity
-import com.example.data.model.TeamStandingEntity
-import com.example.data.model.CricHeroesProfile
 import com.example.data.model.RoleChangeRequest
-import com.example.data.model.ChatMessage
-import com.example.data.model.DirectPersonalMessage
-import com.example.data.model.BroadcastOverlayEvent
-import com.example.data.audio.StadiumSoundManager
-import com.example.data.chat.RealChatRepository
-import com.google.firebase.FirebaseApp
-import com.google.firebase.FirebaseOptions
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.ListenerRegistration
-import android.content.Context
-import java.util.UUID
-import com.example.data.audio.AiSidhuCommentaryManager
-import com.example.data.audio.SidhuCommentaryGenerator
-import com.example.data.audio.SidhuVoiceStyle
-import com.example.data.ai.AiEngineMode
-import com.example.data.ai.AiMatchSummarizer
-import com.example.data.ai.AiSettingsManager
-import com.example.data.ai.MatchSummaryResult
+import com.example.data.model.TeamStandingEntity
 import com.example.data.network.NetworkConnectivityObserver
 import com.example.data.network.NetworkStatus
 import com.example.data.repository.CricketRepository
 import com.example.data.update.AppUpdateManager
-import com.example.data.cloud.CloudSyncService
 import com.example.data.update.AppUpdateState
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 enum class AppScreenTab {
     MATCHES_FEED,
@@ -77,22 +76,11 @@ enum class CommentaryFilter {
 
 class CricketViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val firestore: FirebaseFirestore? by lazy {
-        try {
-            if (FirebaseApp.getApps(getApplication()).isEmpty()) {
-                val options = FirebaseOptions.Builder()
-                    .setApplicationId("1:516353855768:android:crictrack")
-                    .setProjectId("ai-studio-crictrack")
-                    .setApiKey("AIzaSyFakeKeyForLocalFallbackOnly12345")
-                    .build()
-                FirebaseApp.initializeApp(getApplication(), options)
-            }
-            FirebaseFirestore.getInstance()
-        } catch (e: Throwable) {
-            android.util.Log.w("CricketViewModel", "Firestore initialization fallback: ${e.message}")
-            null
-        }
+    // Real Firebase Firestore Instance (Automatically reads google-services.json)
+    private val firestore: FirebaseFirestore by lazy {
+        FirebaseFirestore.getInstance()
     }
+
     private var matchChatListener: ListenerRegistration? = null
     private var directChatListener: ListenerRegistration? = null
 
@@ -124,13 +112,8 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     private val _showNetworkDialog = MutableStateFlow(false)
     val showNetworkDialog = _showNetworkDialog.asStateFlow()
 
-    fun setShowNetworkDialog(show: Boolean) {
-        _showNetworkDialog.value = show
-    }
-
-    fun setForceLiteMode(force: Boolean) {
-        _isForceLiteMode.value = force
-    }
+    fun setShowNetworkDialog(show: Boolean) { _showNetworkDialog.value = show }
+    fun setForceLiteMode(force: Boolean) { _isForceLiteMode.value = force }
 
     private val sidhuCommentaryManager = AiSidhuCommentaryManager(application)
     val isSidhuCommentaryEnabled = sidhuCommentaryManager.isCommentaryEnabled
@@ -141,37 +124,14 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     val sidhuSpeed = sidhuCommentaryManager.currentSpeed
     val sidhuVoiceGender = sidhuCommentaryManager.voiceGender
 
-    fun toggleSidhuCommentary(enabled: Boolean? = null) {
-        sidhuCommentaryManager.toggleCommentary(enabled)
-    }
-
-    fun setSidhuVoiceStyle(style: SidhuVoiceStyle) {
-        sidhuCommentaryManager.setVoiceStyle(style)
-    }
-
-    fun setSidhuPitch(pitch: Float) {
-        sidhuCommentaryManager.setCustomPitch(pitch)
-    }
-
-    fun setSidhuSpeed(speed: Float) {
-        sidhuCommentaryManager.setCustomSpeed(speed)
-    }
-
-    fun setSidhuVoiceGender(gender: String) {
-        sidhuCommentaryManager.setVoiceGender(gender)
-    }
-
-    fun resetSidhuVoiceDefaults() {
-        sidhuCommentaryManager.resetToSidhuDefaults()
-    }
-
-    fun testSidhuVoice() {
-        sidhuCommentaryManager.testVoiceSample()
-    }
-
-    fun testSidhuCommentary() {
-        sidhuCommentaryManager.triggerTestDialogue()
-    }
+    fun toggleSidhuCommentary(enabled: Boolean? = null) { sidhuCommentaryManager.toggleCommentary(enabled) }
+    fun setSidhuVoiceStyle(style: SidhuVoiceStyle) { sidhuCommentaryManager.setVoiceStyle(style) }
+    fun setSidhuPitch(pitch: Float) { sidhuCommentaryManager.setCustomPitch(pitch) }
+    fun setSidhuSpeed(speed: Float) { sidhuCommentaryManager.setCustomSpeed(speed) }
+    fun setSidhuVoiceGender(gender: String) { sidhuCommentaryManager.setVoiceGender(gender) }
+    fun resetSidhuVoiceDefaults() { sidhuCommentaryManager.resetToSidhuDefaults() }
+    fun testSidhuVoice() { sidhuCommentaryManager.testVoiceSample() }
+    fun testSidhuCommentary() { sidhuCommentaryManager.triggerTestDialogue() }
 
     // AI Match Summary & Wrap-up
     private val aiSettingsManager = AiSettingsManager(application)
@@ -181,21 +141,10 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     private val _showAiSettingsDialog = MutableStateFlow(false)
     val showAiSettingsDialog = _showAiSettingsDialog.asStateFlow()
 
-    fun setShowAiSettingsDialog(show: Boolean) {
-        _showAiSettingsDialog.value = show
-    }
-
-    fun saveCustomApiKey(key: String) {
-        aiSettingsManager.saveCustomApiKey(key)
-    }
-
-    fun clearCustomApiKey() {
-        aiSettingsManager.clearCustomApiKey()
-    }
-
-    fun setAiEngineMode(mode: AiEngineMode) {
-        aiSettingsManager.setAiMode(mode)
-    }
+    fun setShowAiSettingsDialog(show: Boolean) { _showAiSettingsDialog.value = show }
+    fun saveCustomApiKey(key: String) { aiSettingsManager.saveCustomApiKey(key) }
+    fun clearCustomApiKey() { aiSettingsManager.clearCustomApiKey() }
+    fun setAiEngineMode(mode: AiEngineMode) { aiSettingsManager.setAiMode(mode) }
 
     fun testCustomApiKey(key: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
@@ -246,42 +195,17 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         if (summary != null) {
             sidhuCommentaryManager.speak(summary.spokenScript)
         } else {
-            val match = currentMatch.value ?: return
-            val balls = currentBallEvents.value
-            viewModelScope.launch {
-                _isGeneratingSummary.value = true
-                try {
-                    val gen = AiMatchSummarizer.generateSummary(
-                        match = match,
-                        balls = balls,
-                        style = sidhuVoiceStyle.value,
-                        customApiKey = aiSettingsManager.getEffectiveApiKey(),
-                        forceOffline = (aiSettingsManager.currentMode.value == AiEngineMode.OFFLINE_LOCAL)
-                    )
-                    _matchSummary.value = gen
-                    sidhuCommentaryManager.speak(gen.spokenScript)
-                } catch (_: Exception) {
-                } finally {
-                    _isGeneratingSummary.value = false
-                }
-            }
+            generateMatchSummary()
         }
     }
 
-    fun stopSummaryAudio() {
-        sidhuCommentaryManager.stop()
-    }
+    fun stopSummaryAudio() { sidhuCommentaryManager.stop() }
 
     private val _isVideoOverlayExpanded = MutableStateFlow(true)
     val isVideoOverlayExpanded = _isVideoOverlayExpanded.asStateFlow()
 
-    fun selectLiveCenterSubTab(subTab: LiveCenterSubTab) {
-        _liveCenterSubTab.value = subTab
-    }
-
-    fun toggleVideoOverlayExpanded() {
-        _isVideoOverlayExpanded.value = !_isVideoOverlayExpanded.value
-    }
+    fun selectLiveCenterSubTab(subTab: LiveCenterSubTab) { _liveCenterSubTab.value = subTab }
+    fun toggleVideoOverlayExpanded() { _isVideoOverlayExpanded.value = !_isVideoOverlayExpanded.value }
 
     fun openMatchWatchVideo(matchId: String) {
         _selectedMatchId.value = matchId
@@ -298,11 +222,10 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     private val _commentaryFilter = MutableStateFlow(CommentaryFilter.ALL)
     val commentaryFilter = _commentaryFilter.asStateFlow()
 
-    // Scorer Mode Dialog visibility
     private val _showScorerSheet = MutableStateFlow(false)
     val showScorerSheet = _showScorerSheet.asStateFlow()
 
-    // Unified Messages Hub State (Consolidates Live Match Chat & DMs)
+    // Unified Messages Hub State
     private val _showMessagesHub = MutableStateFlow(false)
     val showMessagesHub = _showMessagesHub.asStateFlow()
     private val _messagesHubTab = MutableStateFlow(0)
@@ -320,27 +243,17 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         closeDirectMessageChat()
     }
 
-    fun recordQuickRun(runs: Int) {
-        recordBall(runs = runs)
-    }
-
-    fun recordQuickWicket() {
-        recordBall(runs = 0, isWicket = true, wicketType = "Out")
-    }
-
-    fun recordQuickExtra(extraType: String = "Wide") {
-        recordBall(runs = 0, extraType = extraType)
-    }
+    fun recordQuickRun(runs: Int) { recordBall(runs = runs) }
+    fun recordQuickWicket() { recordBall(runs = 0, isWicket = true, wicketType = "Out") }
+    fun recordQuickExtra(extraType: String = "Wide") { recordBall(runs = 0, extraType = extraType) }
 
     // DRS Review State
     private val _drsState = MutableStateFlow(DrsReviewState())
     val drsState = _drsState.asStateFlow()
 
-    // Zero-delay streaming simulation state (ball pitch visualizer)
-    private val _pitchAnimPhase = MutableStateFlow(0f) // 0 to 1
+    private val _pitchAnimPhase = MutableStateFlow(0f)
     val pitchAnimPhase = _pitchAnimPhase.asStateFlow()
 
-    // Highlights state
     val highlightClips: List<HighlightClip>
     private val _selectedClip = MutableStateFlow<HighlightClip?>(null)
     val selectedClip = _selectedClip.asStateFlow()
@@ -353,7 +266,6 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     private val _cameraAngle = MutableStateFlow("Broadcast")
     val cameraAngle = _cameraAngle.asStateFlow()
 
-    // Notification Toggles
     private val _notifyWickets = MutableStateFlow(true)
     val notifyWickets = _notifyWickets.asStateFlow()
     private val _notifyBoundaries = MutableStateFlow(true)
@@ -363,11 +275,9 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     private val _notifyDrs = MutableStateFlow(true)
     val notifyDrs = _notifyDrs.asStateFlow()
 
-    // In-app alert banner banner for real-time live events
     private val _bannerAlert = MutableStateFlow<String?>(null)
     val bannerAlert = _bannerAlert.asStateFlow()
 
-    // 4-Phone Official Roles & Authorization
     private val rolePrefs = application.getSharedPreferences("ayuu_device_roles", Context.MODE_PRIVATE)
     private val savedRole = try {
         DeviceRole.valueOf(rolePrefs.getString("active_role", DeviceRole.SPECTATOR_VIEWER.name) ?: DeviceRole.SPECTATOR_VIEWER.name)
@@ -375,25 +285,21 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         DeviceRole.SPECTATOR_VIEWER
     }
 
-    // Default: Every user starts strictly as SPECTATOR_VIEWER to prevent cheating
     private val _currentDeviceRole = MutableStateFlow(savedRole)
     val currentDeviceRole = _currentDeviceRole.asStateFlow()
 
-    // Master Admin PIN (Owner Ayush control, no default hint shown in UI)
     private val _officialPin = MutableStateFlow(rolePrefs.getString("admin_pin", "8899") ?: "8899")
     val officialPin = _officialPin.asStateFlow()
 
     private val _isAuthorizedOfficial = MutableStateFlow(savedRole != DeviceRole.SPECTATOR_VIEWER)
     val isAuthorizedOfficial = _isAuthorizedOfficial.asStateFlow()
 
-    // Role Requests submitted by users to Admin
     private val _roleRequests = MutableStateFlow<List<RoleChangeRequest>>(emptyList())
     val roleRequests = _roleRequests.asStateFlow()
 
     private val _showRoleRequestsDialog = MutableStateFlow(false)
     val showRoleRequestsDialog = _showRoleRequestsDialog.asStateFlow()
 
-    // CricHeroes Profile Management
     private val profilePrefs = application.getSharedPreferences("ayuu_cricheroes_profile", Context.MODE_PRIVATE)
 
     fun isUserLoggedIn(): Boolean {
@@ -409,13 +315,10 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     private val _showProfileDialog = MutableStateFlow(false)
     val showProfileDialog = _showProfileDialog.asStateFlow()
 
-    // World-Class CricHeroes Login Screen - Opens on first visit, bypasses if logged in
     private val _showLoginScreen = MutableStateFlow(!isUserLoggedIn())
     val showLoginScreen = _showLoginScreen.asStateFlow()
 
-    fun setShowLoginScreen(show: Boolean) {
-        _showLoginScreen.value = show
-    }
+    fun setShowLoginScreen(show: Boolean) { _showLoginScreen.value = show }
 
     fun performLogin(profile: CricHeroesProfile) {
         saveUserProfile(profile)
@@ -431,49 +334,32 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         showBanner("Logged out successfully.")
     }
 
-    // WhatsApp Match Summary Card & Poster Dialog
     private val _showWhatsAppShareDialog = MutableStateFlow(false)
     val showWhatsAppShareDialog = _showWhatsAppShareDialog.asStateFlow()
+    fun setShowWhatsAppShareDialog(show: Boolean) { _showWhatsAppShareDialog.value = show }
 
-    fun setShowWhatsAppShareDialog(show: Boolean) {
-        _showWhatsAppShareDialog.value = show
-    }
-
-    // Wagon Wheel & Ball Pitch Map Visualizer Dialog
     private val _showWagonWheelDialog = MutableStateFlow(false)
     val showWagonWheelDialog = _showWagonWheelDialog.asStateFlow()
+    fun setShowWagonWheelDialog(show: Boolean) { _showWagonWheelDialog.value = show }
 
-    fun setShowWagonWheelDialog(show: Boolean) {
-        _showWagonWheelDialog.value = show
-    }
-
-    // Hotstar-Style Live Broadcast Graphic Overlays (TV Lower-Thirds)
     private val _activeBroadcastOverlay = MutableStateFlow<BroadcastOverlayEvent?>(null)
     val activeBroadcastOverlay = _activeBroadcastOverlay.asStateFlow()
 
-    fun triggerBroadcastOverlay(event: BroadcastOverlayEvent) {
-        _activeBroadcastOverlay.value = event
-    }
+    fun triggerBroadcastOverlay(event: BroadcastOverlayEvent) { _activeBroadcastOverlay.value = event }
+    fun dismissBroadcastOverlay() { _activeBroadcastOverlay.value = null }
 
-    fun dismissBroadcastOverlay() {
-        _activeBroadcastOverlay.value = null
-    }
-
-    // Instagram-Style Live Match Chat (Real Firebase Firestore)
     private val _showChatDialog = MutableStateFlow(false)
     val showChatDialog = _showChatDialog.asStateFlow()
 
     private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessages = _chatMessages.asStateFlow()
 
-    // Dialogs
     private val _showRoleDialog = MutableStateFlow(false)
     val showRoleDialog = _showRoleDialog.asStateFlow()
 
     private val _showCreateMatchDialog = MutableStateFlow(false)
     val showCreateMatchDialog = _showCreateMatchDialog.asStateFlow()
 
-    // In-App Auto Updater & Ground Sync
     private val appUpdateManager = AppUpdateManager(application)
     val updateState: StateFlow<AppUpdateState> = appUpdateManager.updateState
 
@@ -485,26 +371,19 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     fun setShowUpdateDialog(show: Boolean) {
         _showUpdateDialog.value = show
         if (show) {
-            // Record last time user opened the update dialog
             updateReminderPrefs.edit().putLong("last_update_check_time", System.currentTimeMillis()).apply()
         }
     }
 
-    /**
-     * Checks if 2-3 days (48+ hours) have passed since user last updated or checked for updates.
-     * If 2-3 days have elapsed and an update is detected, automatically triggers the Update Popup.
-     */
     private fun checkPeriodicUpdateReminder() {
         viewModelScope.launch {
             val lastCheck = updateReminderPrefs.getLong("last_update_check_time", 0L)
             val currentTime = System.currentTimeMillis()
-            val twoDaysInMillis = 2 * 24 * 60 * 60 * 1000L // 48 hours (2 days)
+            val twoDaysInMillis = 2 * 24 * 60 * 60 * 1000L
             val isOverdue = (currentTime - lastCheck) >= twoDaysInMillis
 
-            // Run update check in background
             appUpdateManager.checkForUpdates()
 
-            // If 2-3 days have elapsed or an update is ready, prompt the user with popup
             if (isOverdue && appUpdateManager.updateState.value.isUpdateAvailable) {
                 _showUpdateDialog.value = true
                 updateReminderPrefs.edit().putLong("last_update_check_time", currentTime).apply()
@@ -513,30 +392,19 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun checkForUpdates(customUrl: String? = null) {
-        viewModelScope.launch {
-            appUpdateManager.checkForUpdates(customUrl)
-        }
+        viewModelScope.launch { appUpdateManager.checkForUpdates(customUrl) }
     }
 
     fun downloadAndInstallApk(downloadUrl: String) {
-        viewModelScope.launch {
-            appUpdateManager.downloadApk(downloadUrl)
-        }
+        viewModelScope.launch { appUpdateManager.downloadApk(downloadUrl) }
     }
 
-    fun installDownloadedApk() {
-        appUpdateManager.installDownloadedApk()
-    }
+    fun installDownloadedApk() { appUpdateManager.installDownloadedApk() }
+    fun shareInstalledApkDirectly() { appUpdateManager.shareInstalledApkDirectly() }
 
-    fun shareInstalledApkDirectly() {
-        appUpdateManager.shareInstalledApkDirectly()
-    }
-
-    // DRS Big Screen Broadcast Alert (visible on all spectator and official devices)
     private val _drsBroadcast = MutableStateFlow<DrsBroadcastAlert?>(null)
     val drsBroadcast = _drsBroadcast.asStateFlow()
 
-    // Bowler and Batsman Rotation Dialogs
     private val _showChangeBowlerDialog = MutableStateFlow(false)
     val showChangeBowlerDialog = _showChangeBowlerDialog.asStateFlow()
 
@@ -564,10 +432,14 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     fun changeBowler(newBowlerName: String) {
         viewModelScope.launch {
             repository.updateNewBowler(_selectedMatchId.value, newBowlerName)
+            val updated = repository.getMatch(_selectedMatchId.value).firstOrNull()
+            if (updated != null) {
+                RealtimeMatchSyncService.publishMatch(updated)
+                CloudSyncService.publishLiveMatch(updated)
+            }
             showBanner("🎳 Naye Bowler: $newBowlerName attack par aaye hain!")
             try {
-                val sidhuMsg = "Bowling change guru! Ab balling karenge $newBowlerName! Thoko taali!"
-                sidhuCommentaryManager.speak(sidhuMsg)
+                sidhuCommentaryManager.speak("Bowling change guru! Ab balling karenge $newBowlerName! Thoko taali!")
             } catch (_: Exception) {}
         }
     }
@@ -575,6 +447,11 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     fun changeBatsman(isStriker: Boolean, newName: String) {
         viewModelScope.launch {
             repository.updateNewBatsman(_selectedMatchId.value, newName, isStriker)
+            val updated = repository.getMatch(_selectedMatchId.value).firstOrNull()
+            if (updated != null) {
+                RealtimeMatchSyncService.publishMatch(updated)
+                CloudSyncService.publishLiveMatch(updated)
+            }
             val role = if (isStriker) "Striker" else "Non-Striker"
             showBanner("🏏 $role badal kar $newName kiya gaya!")
         }
@@ -589,7 +466,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     ) {
         viewModelScope.launch {
             val commentary = "OUT! $dismissedBatsman $wicketType! In comes $newBatsmanName."
-            repository.recordDelivery(
+            val updatedMatch = repository.recordDelivery(
                 matchId = _selectedMatchId.value,
                 runs = runsOnBall,
                 isWicket = true,
@@ -605,30 +482,30 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             showBanner("⚡ OUT! $dismissedBatsman $wicketType! $newBatsmanName maidaan par aaye.")
             try {
                 StadiumSoundManager.playWicketDismissal()
-                val sidhuMsg = "$dismissedBatsman out ho kar pavilion laut gaye guru! Ab naye ballebaaz $newBatsmanName maidaan par aaye hain! Thoko taali!"
-                sidhuCommentaryManager.speak(sidhuMsg)
+                val scoreVoice = if (updatedMatch != null) "${updatedMatch.score} run, ${updatedMatch.wickets} wicket" else ""
+                sidhuCommentaryManager.speak("$dismissedBatsman out ho kar pavilion laut gaye guru! Ab naye ballebaaz $newBatsmanName maidaan par aaye hain! Score hai $scoreVoice! Thoko taali!")
+                if (updatedMatch != null) {
+                    RealtimeMatchSyncService.publishMatch(updatedMatch)
+                    CloudSyncService.publishLiveMatch(updatedMatch)
+                }
             } catch (_: Exception) {}
         }
     }
 
-    // Camera Streaming State (Phone 1 & Phone 2)
     private val _isStreamingPitchCam = MutableStateFlow(true)
     val isStreamingPitchCam = _isStreamingPitchCam.asStateFlow()
 
     private val _isStreamingSideCam = MutableStateFlow(true)
     val isStreamingSideCam = _isStreamingSideCam.asStateFlow()
 
-    // Spectator viewer selected camera angle
-    private val _spectatorCamAngle = MutableStateFlow("PITCH_CAM") // "PITCH_CAM" or "SIDE_CAM"
+    private val _spectatorCamAngle = MutableStateFlow("PITCH_CAM")
     val spectatorCamAngle = _spectatorCamAngle.asStateFlow()
 
-    // Crease calibration line offset for runouts
     private val _creaseOffset = MutableStateFlow(0f)
     val creaseOffset = _creaseOffset.asStateFlow()
 
     private var drsAutoJob: Job? = null
     private var videoPlaybackJob: Job? = null
-    private var liveStreamJob: Job? = null
 
     init {
         val db = CricketDatabase.getInstance(application)
@@ -677,7 +554,22 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         }
         listenToMatchChat(_selectedMatchId.value)
 
-        // Continuous Cloud Sync for Live Match, Users Directory & Messages across multiple phones
+        // Real-time Firebase match sync for instant cross-device updates
+        viewModelScope.launch {
+            try {
+                RealtimeMatchSyncService.observeAllMatches().collect { remoteMatches ->
+                    if (remoteMatches.isNotEmpty()) {
+                        if (_currentDeviceRole.value != DeviceRole.OFFICIAL_SCORER) {
+                            repository.upsertMatchesFromFirestore(remoteMatches)
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.w("CricketViewModel", "Firebase match sync listener: ${e.message}")
+            }
+        }
+
+        // Continuous Cloud Sync loop
         viewModelScope.launch {
             syncCloudUsers()
             val myProf = _userProfile.value
@@ -688,58 +580,37 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             while (true) {
                 delay(2500)
                 try {
-                    // 1. Sync live match for non-scorer roles (Viewers, Umpires)
                     if (_currentDeviceRole.value != DeviceRole.OFFICIAL_SCORER) {
                         val cloudMatch = CloudSyncService.fetchLiveMatchFromCloud()
                         if (cloudMatch != null && cloudMatch.updatedAt > 0) {
                             repository.syncMatchFromCloud(cloudMatch)
                         }
                     }
-
-                    // 2. Refresh messages from central hub
                     refreshCloudMessages()
                 } catch (e: Throwable) {
-                    android.util.Log.w("CricketViewModel", "Cloud sync loop error: ${e.message}")
+                    Log.w("CricketViewModel", "Cloud sync loop: ${e.message}")
                 }
             }
         }
     }
 
-    private fun startHighlightVideoLoop() {
-        videoPlaybackJob?.cancel()
-        videoPlaybackJob = viewModelScope.launch {
-            while (true) {
-                delay(100)
-                if (_isVideoPlaying.value) {
-                    val step = if (_videoSpeed.value == "0.5x") 0.005f else 0.012f
-                    var next = _videoProgress.value + step
-                    if (next > 1.0f) next = 0f
-                    _videoProgress.value = next
-                }
-            }
-        }
-    }
-
-    fun selectTab(tab: AppScreenTab) {
-        _currentTab.value = tab
-    }
-
+    fun selectTab(tab: AppScreenTab) { _currentTab.value = tab }
     fun selectMatch(matchId: String) {
         _selectedMatchId.value = matchId
         listenToMatchChat(matchId)
     }
 
-    fun setCommentaryFilter(filter: CommentaryFilter) {
-        _commentaryFilter.value = filter
-    }
-
-    fun setScorerSheetVisible(visible: Boolean) {
-        _showScorerSheet.value = visible
-    }
+    fun setCommentaryFilter(filter: CommentaryFilter) { _commentaryFilter.value = filter }
+    fun setScorerSheetVisible(visible: Boolean) { _showScorerSheet.value = visible }
 
     fun switchStrikers() {
         viewModelScope.launch {
             repository.switchStrikers(_selectedMatchId.value)
+            val updated = repository.getMatch(_selectedMatchId.value).firstOrNull()
+            if (updated != null) {
+                RealtimeMatchSyncService.publishMatch(updated)
+                CloudSyncService.publishLiveMatch(updated)
+            }
             showBanner("Batsmen crossed: Striker rotated!")
         }
     }
@@ -754,7 +625,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     ) {
         viewModelScope.launch {
             val commentary = generateSmartCommentary(runs, isWicket, wicketType, extraType, pitchZone)
-            repository.recordDelivery(
+            val updatedMatch = repository.recordDelivery(
                 matchId = _selectedMatchId.value,
                 runs = runs,
                 isWicket = isWicket,
@@ -767,120 +638,107 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             val toast = if (isWicket) "OUT! $wicketType!" else if (runs == 6) "SIX! Maximum!" else if (runs == 4) "FOUR!" else "$runs run(s) added"
             showBanner(toast)
 
-            // Trigger AI Sidhu Paaji Commentary in background / foreground
-            try {
-                val match = currentMatch.value
-                val isWide = extraType.equals("Wide", ignoreCase = true) || extraType.equals("WD", ignoreCase = true)
-                val isNoBall = extraType.equals("NoBall", ignoreCase = true) || extraType.equals("NB", ignoreCase = true)
-                val penalty = if (isWide || isNoBall) 1 else 0
-                val totalAdded = runs + penalty
-                val newScore = (match?.score ?: 0) + totalAdded
-                val newWkts = if (isWicket) ((match?.wickets ?: 0) + 1).coerceAtMost(10) else (match?.wickets ?: 0)
-                val currentScoreStr = "$newScore/$newWkts"
+            if (updatedMatch != null) {
+                try {
+                    val currentScoreAudio = "${updatedMatch.score} run, ${updatedMatch.wickets} wicket"
+                    val overNum = updatedMatch.legalBalls / 6
+                    val ballNum = (updatedMatch.legalBalls % 6).let { if (it == 0 && updatedMatch.legalBalls > 0) 6 else it }
+                    val ballEvent = BallEventEntity(
+                        matchId = updatedMatch.id,
+                        overNumber = overNum,
+                        ballInOver = ballNum,
+                        runs = runs,
+                        isWicket = isWicket,
+                        wicketType = wicketType,
+                        extraType = extraType,
+                        batsman = updatedMatch.strikerName,
+                        bowler = updatedMatch.bowlerName,
+                        commentary = commentary
+                    )
+                    val sidhuDialogue = SidhuCommentaryGenerator.generateBallCommentary(
+                        ball = ballEvent,
+                        strikerName = updatedMatch.strikerName,
+                        bowlerName = updatedMatch.bowlerName,
+                        currentScore = currentScoreAudio,
+                        style = sidhuVoiceStyle.value
+                    )
+                    sidhuCommentaryManager.speak(sidhuDialogue)
 
-                val overNum = (match?.legalBalls ?: 0) / 6
-                val ballNum = ((match?.legalBalls ?: 0) % 6) + 1
-                val ballEvent = BallEventEntity(
-                    matchId = _selectedMatchId.value,
-                    overNumber = overNum,
-                    ballInOver = ballNum,
-                    runs = runs,
-                    isWicket = isWicket,
-                    wicketType = wicketType,
-                    extraType = extraType,
-                    batsman = match?.strikerName ?: "Ballebaaz",
-                    bowler = match?.bowlerName ?: "Bowler",
-                    commentary = commentary
-                )
-                val sidhuDialogue = SidhuCommentaryGenerator.generateBallCommentary(
-                    ball = ballEvent,
-                    strikerName = match?.strikerName ?: "Ballebaaz",
-                    bowlerName = match?.bowlerName ?: "Bowler",
-                    currentScore = currentScoreStr,
-                    style = sidhuVoiceStyle.value
-                )
-                sidhuCommentaryManager.speak(sidhuDialogue)
-
-                // Instantly broadcast updated live score to cloud for other phones
-                if (match != null) {
-                    val updatedMatch = match.copy(score = newScore, wickets = newWkts)
+                    RealtimeMatchSyncService.publishMatch(updatedMatch, ballEvent)
                     CloudSyncService.publishLiveMatch(updatedMatch, ballEvent)
-                }
-            } catch (_: Exception) {}
-
-            // Trigger Stadium Sound FX and Hotstar TV Broadcast Overlay
-            try {
-                val match = currentMatch.value
-                val strikerName = match?.strikerName ?: "Batter"
-                val bowlerName = match?.bowlerName ?: "Bowler"
-                val prevStrikerRuns = match?.strikerRuns ?: 0
-                val newStrikerRuns = prevStrikerRuns + runs
-
-                if (isWicket) {
-                    StadiumSoundManager.playWicketDismissal()
-                    triggerBroadcastOverlay(
-                        BroadcastOverlayEvent(
-                            type = BroadcastOverlayEvent.OverlayType.WICKET_DISMISSAL,
-                            headline = "⚡ WICKET! $wicketType",
-                            subheadline = "$bowlerName dismisses $strikerName",
-                            statDetail = "$prevStrikerRuns runs",
-                            accentColorHex = 0xFFEF4444
-                        )
-                    )
-                } else if (prevStrikerRuns < 50 && newStrikerRuns >= 50) {
-                    StadiumSoundManager.playSixCheer()
-                    triggerBroadcastOverlay(
-                        BroadcastOverlayEvent(
-                            type = BroadcastOverlayEvent.OverlayType.MILESTONE_50,
-                            headline = "⭐ HALF CENTURY 50!",
-                            subheadline = "$strikerName raises his bat!",
-                            statDetail = "$newStrikerRuns Runs",
-                            accentColorHex = 0xFFFFD700
-                        )
-                    )
-                } else if (prevStrikerRuns < 100 && newStrikerRuns >= 100) {
-                    StadiumSoundManager.playSixCheer()
-                    triggerBroadcastOverlay(
-                        BroadcastOverlayEvent(
-                            type = BroadcastOverlayEvent.OverlayType.MILESTONE_100,
-                            headline = "👑 MAGNIFICENT 100!",
-                            subheadline = "Spectacular Century by $strikerName!",
-                            statDetail = "$newStrikerRuns Runs",
-                            accentColorHex = 0xFFFFD700
-                        )
-                    )
-                } else if (runs == 6) {
-                    StadiumSoundManager.playSixCheer()
-                    triggerBroadcastOverlay(
-                        BroadcastOverlayEvent(
-                            type = BroadcastOverlayEvent.OverlayType.MAXIMUM_SIX,
-                            headline = "💥 MAXIMUM SIX!",
-                            subheadline = "$strikerName clears the ropes with authority",
-                            statDetail = "88m Long-on",
-                            accentColorHex = 0xFF00E676
-                        )
-                    )
-                } else if (runs == 4) {
-                    StadiumSoundManager.playFourHorn()
-                    triggerBroadcastOverlay(
-                        BroadcastOverlayEvent(
-                            type = BroadcastOverlayEvent.OverlayType.BOUNDARY_FOUR,
-                            headline = "⚡ BOUNDARY FOUR!",
-                            subheadline = "$strikerName pierces the field with precision",
-                            statDetail = "Cover Drive",
-                            accentColorHex = 0xFF00E5FF
-                        )
-                    )
+                } catch (e: Exception) {
+                    Log.w("CricketViewModel", "Commentary/Sync error: ${e.message}")
                 }
 
-                // Check for over completion to automatically prompt Bowler Change
-                val isLegal = extraType != "Wide" && extraType != "NoBall"
-                val prevLegal = match?.legalBalls ?: 0
-                if (isLegal && (prevLegal + 1) > 0 && (prevLegal + 1) % 6 == 0) {
-                    _showChangeBowlerDialog.value = true
-                    showBanner("Over Khatam! Agle over ke liye Bowler chunein 🎳")
-                }
-            } catch (_: Exception) {}
+                try {
+                    val strikerName = updatedMatch.strikerName
+                    val bowlerName = updatedMatch.bowlerName
+                    val currentStrikerRuns = updatedMatch.strikerRuns
+
+                    if (isWicket) {
+                        StadiumSoundManager.playWicketDismissal()
+                        triggerBroadcastOverlay(
+                            BroadcastOverlayEvent(
+                                type = BroadcastOverlayEvent.OverlayType.WICKET_DISMISSAL,
+                                headline = "⚡ WICKET! $wicketType",
+                                subheadline = "$bowlerName dismisses $strikerName",
+                                statDetail = "$currentStrikerRuns runs",
+                                accentColorHex = 0xFFEF4444
+                            )
+                        )
+                    } else if (currentStrikerRuns >= 50 && (currentStrikerRuns - runs) < 50) {
+                        StadiumSoundManager.playSixCheer()
+                        triggerBroadcastOverlay(
+                            BroadcastOverlayEvent(
+                                type = BroadcastOverlayEvent.OverlayType.MILESTONE_50,
+                                headline = "⭐ HALF CENTURY 50!",
+                                subheadline = "$strikerName raises his bat!",
+                                statDetail = "$currentStrikerRuns Runs",
+                                accentColorHex = 0xFFFFD700
+                            )
+                        )
+                    } else if (currentStrikerRuns >= 100 && (currentStrikerRuns - runs) < 100) {
+                        StadiumSoundManager.playSixCheer()
+                        triggerBroadcastOverlay(
+                            BroadcastOverlayEvent(
+                                type = BroadcastOverlayEvent.OverlayType.MILESTONE_100,
+                                headline = "👑 MAGNIFICENT 100!",
+                                subheadline = "Spectacular Century by $strikerName!",
+                                statDetail = "$currentStrikerRuns Runs",
+                                accentColorHex = 0xFFFFD700
+                            )
+                        )
+                    } else if (runs == 6) {
+                        StadiumSoundManager.playSixCheer()
+                        triggerBroadcastOverlay(
+                            BroadcastOverlayEvent(
+                                type = BroadcastOverlayEvent.OverlayType.MAXIMUM_SIX,
+                                headline = "💥 MAXIMUM SIX!",
+                                subheadline = "$strikerName clears the ropes with authority",
+                                statDetail = "88m Long-on",
+                                accentColorHex = 0xFF00E676
+                            )
+                        )
+                    } else if (runs == 4) {
+                        StadiumSoundManager.playFourHorn()
+                        triggerBroadcastOverlay(
+                            BroadcastOverlayEvent(
+                                type = BroadcastOverlayEvent.OverlayType.BOUNDARY_FOUR,
+                                headline = "⚡ BOUNDARY FOUR!",
+                                subheadline = "$strikerName pierces the field with precision",
+                                statDetail = "Cover Drive",
+                                accentColorHex = 0xFF00E5FF
+                            )
+                        )
+                    }
+
+                    val isLegal = extraType != "Wide" && extraType != "NoBall"
+                    if (isLegal && updatedMatch.legalBalls > 0 && updatedMatch.legalBalls % 6 == 0) {
+                        _showChangeBowlerDialog.value = true
+                        showBanner("Over Khatam! Agle over ke liye Bowler chunein 🎳")
+                    }
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -891,9 +749,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         extraType: String,
         pitchZone: String
     ): String {
-        if (extraType == "NoBall" && runs >= 6) {
-            return "NO BALL AUR CHHAKKA! 7 runs! Gagan-chumbi sixer aur next ball par Free Hit!"
-        }
+        if (extraType == "NoBall" && runs >= 6) return "NO BALL AUR CHHAKKA! 7 runs! Gagan-chumbi sixer aur next ball par Free Hit!"
         if (extraType == "Wide") return "WIDE BALL! Splayed down the leg side, umpire signals wide."
         if (extraType == "NoBall") return "NO BALL! Overstepping the popping crease! Free hit coming up next ball."
         if (isWicket) {
@@ -924,22 +780,21 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             bowler = bowler,
             onFieldDecision = onFieldDecision,
             reviewStage = 1,
-            pitching = if (appealType == "LBW") "IN_LINE" else "IN_LINE",
+            pitching = "IN_LINE",
             impact = "IN_LINE",
             wicketsHitting = "HITTING",
             aiConfidencePercent = 94,
             thirdUmpireDecision = if (onFieldDecision == "NOT OUT") "OUT" else "OUT"
         )
 
-        // Advance through TV umpire steps automatically with broadcast pauses
         drsAutoJob = viewModelScope.launch {
-            delay(1800) // Step 1: Front Foot Check
+            delay(1800)
             _drsState.value = _drsState.value.copy(reviewStage = 2, isFrontFootNoBall = false)
-            delay(2200) // Step 2: UltraEdge / Snicko Spike
+            delay(2200)
             val hasEdge = appealType == "CAUGHT_BEHIND"
             _drsState.value = _drsState.value.copy(reviewStage = 3, ultraEdgeSpike = hasEdge)
-            delay(2500) // Step 3: Hawk-Eye 3D Ball Tracking
-            _drsState.value = _drsState.value.copy(reviewStage = 4) // Final Decision Screen
+            delay(2500)
+            _drsState.value = _drsState.value.copy(reviewStage = 4)
             if (_notifyDrs.value) {
                 repository.sendCustomNotification(
                     title = "🎯 DRS Outcome: ${_drsState.value.thirdUmpireDecision}!",
@@ -957,7 +812,6 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         deviation: Float,
         impactDist: Float
     ) {
-        // Accurate decision prediction logic
         val isOut = pitching != "OUTSIDE_LEG" && impact == "IN_LINE" && wickets == "HITTING"
         val confidence = when {
             wickets == "MISSING" -> 98
@@ -991,21 +845,10 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         _isVideoPlaying.value = true
     }
 
-    fun toggleVideoPlay() {
-        _isVideoPlaying.value = !_isVideoPlaying.value
-    }
-
-    fun setVideoSpeed(speed: String) {
-        _videoSpeed.value = speed
-    }
-
-    fun setCameraAngle(angle: String) {
-        _cameraAngle.value = angle
-    }
-
-    fun seekVideo(progress: Float) {
-        _videoProgress.value = progress.coerceIn(0f, 1f)
-    }
+    fun toggleVideoPlay() { _isVideoPlaying.value = !_isVideoPlaying.value }
+    fun setVideoSpeed(speed: String) { _videoSpeed.value = speed }
+    fun setCameraAngle(angle: String) { _cameraAngle.value = angle }
+    fun seekVideo(progress: Float) { _videoProgress.value = progress.coerceIn(0f, 1f) }
 
     fun toggleNotification(type: String) {
         when (type) {
@@ -1076,13 +919,8 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         showBanner("Role request rejected by Admin.")
     }
 
-    fun setShowRoleRequestsDialog(show: Boolean) {
-        _showRoleRequestsDialog.value = show
-    }
-
-    fun setShowProfileDialog(show: Boolean) {
-        _showProfileDialog.value = show
-    }
+    fun setShowRoleRequestsDialog(show: Boolean) { _showRoleRequestsDialog.value = show }
+    fun setShowProfileDialog(show: Boolean) { _showProfileDialog.value = show }
 
     fun saveUserProfile(profile: CricHeroesProfile) {
         _userProfile.value = profile
@@ -1102,7 +940,6 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             .putString("avatar", profile.avatarEmoji)
             .apply()
 
-        // Sync with community player roster
         registerCommunityPlayer(profile)
 
         viewModelScope.launch {
@@ -1114,23 +951,25 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         showBanner("Player Profile Verified! @${profile.username} (#${profile.jerseyNumber})")
     }
 
-    fun setShowChatDialog(show: Boolean) {
-        _showChatDialog.value = show
-    }
+    fun setShowChatDialog(show: Boolean) { _showChatDialog.value = show }
 
+    // Live Match Chat Listening (Firestore real-time snapshot)
     fun listenToMatchChat(matchId: String) {
         matchChatListener?.remove()
         try {
-            matchChatListener = firestore?.collection("matches")
-                ?.document(matchId)
-                ?.collection("live_chat")
-                ?.orderBy("timestamp", Query.Direction.ASCENDING)
-                ?.addSnapshotListener { snapshot, error ->
-                    if (error != null || snapshot == null) return@addSnapshotListener
-                    
-                    val currentUsername = _userProfile.value.username
+            matchChatListener = firestore.collection("matches")
+                .document(matchId)
+                .collection("live_chat")
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) {
+                        Log.w("CricketViewModel", "Match chat error: ${error?.message}")
+                        return@addSnapshotListener
+                    }
+
+                    val currentUsername = _userProfile.value.username.trim().removePrefix("@").lowercase()
                     val messages = snapshot.documents.mapNotNull { doc ->
-                        val senderUser = doc.getString("senderUsername") ?: ""
+                        val senderUser = (doc.getString("senderUsername") ?: "").trim().removePrefix("@").lowercase()
                         ChatMessage(
                             id = doc.id,
                             senderName = doc.getString("senderName") ?: "Cricketer",
@@ -1144,10 +983,11 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                     _chatMessages.value = messages
                 }
         } catch (e: Throwable) {
-            android.util.Log.w("CricketViewModel", "Error listening to match chat: ${e.message}")
+            Log.w("CricketViewModel", "Error listening to match chat: ${e.message}")
         }
     }
 
+    // Send Match Live Chat Message
     fun sendChatMessage(text: String) {
         if (text.isBlank()) return
         val profile = _userProfile.value
@@ -1158,8 +998,9 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             DeviceRole.SPECTATOR_VIEWER -> "Spectator"
         }
 
+        val myUsername = profile.username.trim().removePrefix("@").lowercase()
         val messageData = hashMapOf(
-            "senderUsername" to profile.username,
+            "senderUsername" to myUsername,
             "senderName" to profile.fullName.ifBlank { profile.jerseyName },
             "senderRole" to roleLabel,
             "avatarEmoji" to profile.avatarEmoji.ifBlank { "🏏" },
@@ -1167,55 +1008,19 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             "timestamp" to System.currentTimeMillis()
         )
 
-        val fs = firestore
-        if (fs != null) {
-            try {
-                fs.collection("matches")
-                    .document(_selectedMatchId.value)
-                    .collection("live_chat")
-                    .add(messageData)
-                    .addOnFailureListener {
-                        val localMsg = ChatMessage(
-                            id = UUID.randomUUID().toString(),
-                            senderName = messageData["senderName"] as String,
-                            senderRole = messageData["senderRole"] as String,
-                            avatarEmoji = messageData["avatarEmoji"] as String,
-                            message = messageData["message"] as String,
-                            isFromMe = true,
-                            timestamp = messageData["timestamp"] as Long
-                        )
-                        _chatMessages.value = _chatMessages.value + localMsg
-                    }
-            } catch (e: Throwable) {
-                val localMsg = ChatMessage(
-                    id = UUID.randomUUID().toString(),
-                    senderName = messageData["senderName"] as String,
-                    senderRole = messageData["senderRole"] as String,
-                    avatarEmoji = messageData["avatarEmoji"] as String,
-                    message = messageData["message"] as String,
-                    isFromMe = true,
-                    timestamp = messageData["timestamp"] as Long
-                )
-                _chatMessages.value = _chatMessages.value + localMsg
+        firestore.collection("matches")
+            .document(_selectedMatchId.value)
+            .collection("live_chat")
+            .add(messageData)
+            .addOnFailureListener { e ->
+                Log.e("CricketViewModel", "Match chat Firestore send failed: ${e.message}")
             }
-        } else {
-            val localMsg = ChatMessage(
-                id = UUID.randomUUID().toString(),
-                senderName = messageData["senderName"] as String,
-                senderRole = messageData["senderRole"] as String,
-                avatarEmoji = messageData["avatarEmoji"] as String,
-                message = messageData["message"] as String,
-                isFromMe = true,
-                timestamp = messageData["timestamp"] as Long
-            )
-            _chatMessages.value = _chatMessages.value + localMsg
-        }
 
-        // Send to public cloud hub so other devices receive match chat
+        // Secondary fallback sync across public hub
         viewModelScope.launch {
             CloudSyncService.sendCloudMessage(
                 roomId = _selectedMatchId.value,
-                senderUsername = profile.username,
+                senderUsername = myUsername,
                 recipientUsername = "ALL",
                 senderName = profile.fullName.ifBlank { profile.jerseyName },
                 senderRole = roleLabel,
@@ -1225,9 +1030,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun sendChatReaction(emoji: String) {
-        sendChatMessage(emoji)
-    }
+    fun sendChatReaction(emoji: String) { sendChatMessage(emoji) }
 
     fun clearAllStandingsAndStats() {
         viewModelScope.launch {
@@ -1254,48 +1057,47 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    // Community Players Directory (Visible to all 4 phones on match network)
+    // Community Players Directory
     private val _communityPlayers = MutableStateFlow<List<CricHeroesProfile>>(initialCommunityPlayers())
     val communityPlayers = _communityPlayers.asStateFlow()
 
-    // 1-on-1 Instagram-Style Direct Personal Messages (Real Firebase Firestore)
     private val _showDmDialog = MutableStateFlow(false)
     val showDmDialog = _showDmDialog.asStateFlow()
-
-    fun setShowDmDialog(show: Boolean) {
-        _showDmDialog.value = show
-    }
+    fun setShowDmDialog(show: Boolean) { _showDmDialog.value = show }
 
     private val _personalMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val personalMessages = _personalMessages.asStateFlow()
 
-    // Currently opened DM chat partner (null means in inbox)
     private val _activeDmRecipient = MutableStateFlow<CricHeroesProfile?>(null)
     val activeDmRecipient = _activeDmRecipient.asStateFlow()
 
     private fun getDmRoomId(user1: String, user2: String): String {
-        val clean1 = user1.trim().lowercase().removePrefix("@")
-        val clean2 = user2.trim().lowercase().removePrefix("@")
+        val clean1 = user1.trim().lowercase().removePrefix("@").replace(" ", "_")
+        val clean2 = user2.trim().lowercase().removePrefix("@").replace(" ", "_")
         return if (clean1 < clean2) "${clean1}_${clean2}" else "${clean2}_${clean1}"
     }
 
+    // 1-on-1 Personal DMs Real-Time Listener
     fun openDirectMessageWith(player: CricHeroesProfile) {
         _activeDmRecipient.value = player
-        val myUsername = _userProfile.value.username.ifBlank { "user_me" }
-        val otherUsername = player.username
+        val myUsername = _userProfile.value.username.trim().removePrefix("@").lowercase().ifBlank { "user_me" }
+        val otherUsername = player.username.trim().removePrefix("@").lowercase()
         val roomId = getDmRoomId(myUsername, otherUsername)
 
         directChatListener?.remove()
         try {
-            directChatListener = firestore?.collection("direct_chats")
-                ?.document(roomId)
-                ?.collection("messages")
-                ?.orderBy("timestamp", Query.Direction.ASCENDING)
-                ?.addSnapshotListener { snapshot, error ->
-                    if (error != null || snapshot == null) return@addSnapshotListener
-                    
+            directChatListener = firestore.collection("direct_chats")
+                .document(roomId)
+                .collection("messages")
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) {
+                        Log.w("CricketViewModel", "Direct chat error: ${error?.message}")
+                        return@addSnapshotListener
+                    }
+
                     val msgs = snapshot.documents.mapNotNull { doc ->
-                        val sender = doc.getString("senderUsername") ?: ""
+                        val sender = (doc.getString("senderUsername") ?: "").trim().removePrefix("@").lowercase()
                         ChatMessage(
                             id = doc.id,
                             senderName = doc.getString("senderName") ?: "Player",
@@ -1309,7 +1111,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                     _personalMessages.value = msgs
                 }
         } catch (e: Throwable) {
-            android.util.Log.w("CricketViewModel", "Error listening to direct chat: ${e.message}")
+            Log.w("CricketViewModel", "Error listening to direct chat: ${e.message}")
         }
     }
 
@@ -1319,70 +1121,41 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         _personalMessages.value = emptyList()
     }
 
+    // Send 1-on-1 Personal Direct Message
     fun sendDirectMessage(recipient: CricHeroesProfile, text: String) {
         if (text.isBlank()) return
         val myProfile = _userProfile.value
-        val roomId = getDmRoomId(myProfile.username, recipient.username)
+        val myUser = myProfile.username.trim().removePrefix("@").lowercase()
+        val otherUser = recipient.username.trim().removePrefix("@").lowercase()
+        val roomId = getDmRoomId(myUser, otherUser)
 
         val messageData = hashMapOf(
-            "senderUsername" to myProfile.username,
+            "senderUsername" to myUser,
             "senderName" to myProfile.jerseyName.ifBlank { myProfile.fullName },
             "senderRole" to myProfile.primaryRole,
             "avatarEmoji" to myProfile.avatarEmoji.ifBlank { "🏏" },
+            "receiverUsername" to otherUser,
             "message" to text.trim(),
             "timestamp" to System.currentTimeMillis()
         )
 
-        val fs = firestore
-        if (fs != null) {
-            try {
-                fs.collection("direct_chats")
-                    .document(roomId)
-                    .collection("messages")
-                    .add(messageData)
-                    .addOnFailureListener {
-                        val localMsg = ChatMessage(
-                            id = UUID.randomUUID().toString(),
-                            senderName = messageData["senderName"] as String,
-                            senderRole = messageData["senderRole"] as String,
-                            avatarEmoji = messageData["avatarEmoji"] as String,
-                            message = messageData["message"] as String,
-                            isFromMe = true,
-                            timestamp = messageData["timestamp"] as Long
-                        )
-                        _personalMessages.value = _personalMessages.value + localMsg
-                    }
-            } catch (e: Throwable) {
-                val localMsg = ChatMessage(
-                    id = UUID.randomUUID().toString(),
-                    senderName = messageData["senderName"] as String,
-                    senderRole = messageData["senderRole"] as String,
-                    avatarEmoji = messageData["avatarEmoji"] as String,
-                    message = messageData["message"] as String,
-                    isFromMe = true,
-                    timestamp = messageData["timestamp"] as Long
-                )
-                _personalMessages.value = _personalMessages.value + localMsg
+        firestore.collection("direct_chats")
+            .document(roomId)
+            .collection("messages")
+            .add(messageData)
+            .addOnSuccessListener {
+                Log.d("CricketViewModel", "Direct message delivered to room: $roomId")
             }
-        } else {
-            val localMsg = ChatMessage(
-                id = UUID.randomUUID().toString(),
-                senderName = messageData["senderName"] as String,
-                senderRole = messageData["senderRole"] as String,
-                avatarEmoji = messageData["avatarEmoji"] as String,
-                message = messageData["message"] as String,
-                isFromMe = true,
-                timestamp = messageData["timestamp"] as Long
-            )
-            _personalMessages.value = _personalMessages.value + localMsg
-        }
+            .addOnFailureListener { e ->
+                Log.e("CricketViewModel", "Firestore DM delivery failed: ${e.message}")
+            }
 
-        // Send to cloud hub for cross-device direct messaging
+        // Secondary fallback cloud hub
         viewModelScope.launch {
             CloudSyncService.sendCloudMessage(
                 roomId = roomId,
-                senderUsername = myProfile.username,
-                recipientUsername = recipient.username,
+                senderUsername = myUser,
+                recipientUsername = otherUser,
                 senderName = myProfile.jerseyName.ifBlank { myProfile.fullName },
                 senderRole = myProfile.primaryRole,
                 avatarEmoji = myProfile.avatarEmoji.ifBlank { "🏏" },
@@ -1393,9 +1166,8 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
 
     fun sendDirectMessage(recipientUsername: String, text: String) {
         val target = _activeDmRecipient.value
-            ?: _communityPlayers.value.find { 
-                it.username.equals(recipientUsername, ignoreCase = true) ||
-                it.username.removePrefix("@").equals(recipientUsername.removePrefix("@"), ignoreCase = true)
+            ?: _communityPlayers.value.find {
+                it.username.trim().removePrefix("@").equals(recipientUsername.trim().removePrefix("@"), ignoreCase = true)
             }
             ?: return
         sendDirectMessage(target, text)
@@ -1404,14 +1176,15 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     fun isUsernameAvailable(username: String): Boolean {
         val clean = username.trim().removePrefix("@").lowercase()
         if (clean.length < 3) return false
-        val myUsername = _userProfile.value.username.removePrefix("@").lowercase()
+        val myUsername = _userProfile.value.username.trim().removePrefix("@").lowercase()
         if (clean == myUsername) return true
-        return _communityPlayers.value.none { it.username.removePrefix("@").lowercase() == clean }
+        return _communityPlayers.value.none { it.username.trim().removePrefix("@").lowercase() == clean }
     }
 
     fun registerCommunityPlayer(profile: CricHeroesProfile) {
-        val existing = _communityPlayers.value.filterNot { 
-            it.username.equals(profile.username, ignoreCase = true) || it.id == profile.id 
+        val cleanUsername = profile.username.trim().removePrefix("@").lowercase()
+        val existing = _communityPlayers.value.filterNot {
+            it.username.trim().removePrefix("@").lowercase() == cleanUsername || it.id == profile.id
         }
         _communityPlayers.value = listOf(profile) + existing
     }
@@ -1427,14 +1200,15 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                         merged.add(myProfile)
                     }
                     cloudUsers.forEach { cu ->
-                        if (cu.username.isNotBlank() && merged.none { it.username.equals(cu.username, ignoreCase = true) || (it.id.isNotBlank() && it.id == cu.id) }) {
+                        val cleanCu = cu.username.trim().removePrefix("@").lowercase()
+                        if (cleanCu.isNotBlank() && merged.none { it.username.trim().removePrefix("@").lowercase() == cleanCu || (it.id.isNotBlank() && it.id == cu.id) }) {
                             merged.add(cu)
                         }
                     }
                     _communityPlayers.value = merged
                 }
             } catch (e: Throwable) {
-                android.util.Log.w("CricketViewModel", "syncCloudUsers failed: ${e.message}")
+                Log.w("CricketViewModel", "syncCloudUsers failed: ${e.message}")
             }
         }
     }
@@ -1446,19 +1220,17 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                 if (cloudMsgs.isNotEmpty()) {
                     val myUser = _userProfile.value.username.trim().removePrefix("@").lowercase()
 
-                    // Match Room messages
                     val currentRoomId = _selectedMatchId.value
                     val roomMsgs = cloudMsgs.filter {
                         it.roomId == currentRoomId || it.roomId == "match_live_1" || it.roomId.isBlank()
                     }.map { cm ->
-                        val isMe = cm.senderUsername.trim().removePrefix("@").lowercase() == myUser
                         ChatMessage(
                             id = cm.id,
                             senderName = cm.senderName,
                             senderRole = cm.senderRole,
                             avatarEmoji = cm.avatarEmoji,
                             message = cm.message,
-                            isFromMe = isMe,
+                            isFromMe = cm.senderUsername.trim().removePrefix("@").lowercase() == myUser,
                             timestamp = cm.timestamp
                         )
                     }
@@ -1466,7 +1238,6 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                         _chatMessages.value = roomMsgs
                     }
 
-                    // Direct Personal Messages
                     val activeRecipient = _activeDmRecipient.value
                     if (activeRecipient != null) {
                         val activeUser = activeRecipient.username.trim().removePrefix("@").lowercase()
@@ -1476,14 +1247,13 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                             val r = cm.recipientUsername.trim().removePrefix("@").lowercase()
                             cm.roomId == dmRoomId || (s == myUser && r == activeUser) || (s == activeUser && r == myUser)
                         }.map { cm ->
-                            val isMe = cm.senderUsername.trim().removePrefix("@").lowercase() == myUser
                             ChatMessage(
                                 id = cm.id,
                                 senderName = cm.senderName,
                                 senderRole = cm.senderRole,
                                 avatarEmoji = cm.avatarEmoji,
                                 message = cm.message,
-                                isFromMe = isMe,
+                                isFromMe = cm.senderUsername.trim().removePrefix("@").lowercase() == myUser,
                                 timestamp = cm.timestamp
                             )
                         }
@@ -1493,7 +1263,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             } catch (e: Throwable) {
-                android.util.Log.w("CricketViewModel", "refreshCloudMessages failed: ${e.message}")
+                Log.w("CricketViewModel", "refreshCloudMessages failed: ${e.message}")
             }
         }
     }
@@ -1503,36 +1273,21 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         return if (myProfile.username.isNotBlank()) listOf(myProfile) else emptyList()
     }
 
-    fun setShowRoleDialog(show: Boolean) {
-        _showRoleDialog.value = show
-    }
+    fun setShowRoleDialog(show: Boolean) { _showRoleDialog.value = show }
 
     private val _showPlayingSquadDialog = MutableStateFlow(false)
     val showPlayingSquadDialog = _showPlayingSquadDialog.asStateFlow()
+    fun setShowPlayingSquadDialog(show: Boolean) { _showPlayingSquadDialog.value = show }
 
-    fun setShowPlayingSquadDialog(show: Boolean) {
-        _showPlayingSquadDialog.value = show
-    }
-
-    // Coin Flipper Dialog State (Official Match Toss)
     private val _showCoinFlipperDialog = MutableStateFlow(false)
     val showCoinFlipperDialog = _showCoinFlipperDialog.asStateFlow()
+    fun setShowCoinFlipperDialog(show: Boolean) { _showCoinFlipperDialog.value = show }
 
-    fun setShowCoinFlipperDialog(show: Boolean) {
-        _showCoinFlipperDialog.value = show
-    }
-
-    // Interactive Player Profile Card Dialog
     private val _viewingPlayerCard = MutableStateFlow<CricHeroesProfile?>(null)
     val viewingPlayerCard = _viewingPlayerCard.asStateFlow()
 
-    fun openPlayerProfileCard(profile: CricHeroesProfile) {
-        _viewingPlayerCard.value = profile
-    }
-
-    fun closePlayerProfileCard() {
-        _viewingPlayerCard.value = null
-    }
+    fun openPlayerProfileCard(profile: CricHeroesProfile) { _viewingPlayerCard.value = profile }
+    fun closePlayerProfileCard() { _viewingPlayerCard.value = null }
 
     fun updateMatchSquad(
         striker: String,
@@ -1551,13 +1306,16 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
                 teamAPlayers = teamAPlayers,
                 teamBPlayers = teamBPlayers
             )
+            val updated = repository.getMatch(match.id).firstOrNull()
+            if (updated != null) {
+                RealtimeMatchSyncService.publishMatch(updated)
+                CloudSyncService.publishLiveMatch(updated)
+            }
             showBanner("Playing XI & on-field players updated! 🏏")
         }
     }
 
-    fun setShowCreateMatchDialog(show: Boolean) {
-        _showCreateMatchDialog.value = show
-    }
+    fun setShowCreateMatchDialog(show: Boolean) { _showCreateMatchDialog.value = show }
 
     fun createNewMatch(
         name: String,
@@ -1588,6 +1346,11 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             )
             _selectedMatchId.value = matchId
             _showCreateMatchDialog.value = false
+            val created = repository.getMatch(matchId).firstOrNull()
+            if (created != null) {
+                RealtimeMatchSyncService.publishMatch(created)
+                CloudSyncService.publishLiveMatch(created)
+            }
             showBanner("Match Created! 4 Official Phones can now claim roles with PIN ${_officialPin.value}")
         }
     }
@@ -1595,6 +1358,11 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     fun resetCurrentMatchToZero() {
         viewModelScope.launch {
             repository.resetCurrentMatchToZero(_selectedMatchId.value)
+            val updated = repository.getMatch(_selectedMatchId.value).firstOrNull()
+            if (updated != null) {
+                RealtimeMatchSyncService.publishMatch(updated)
+                CloudSyncService.publishLiveMatch(updated)
+            }
             showBanner("Match reset! Score is now 0/0 (0.0 ov)")
         }
     }
@@ -1626,6 +1394,8 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             )
             _selectedMatchId.value = fresh.id
             _showCreateMatchDialog.value = false
+            RealtimeMatchSyncService.publishMatch(fresh)
+            CloudSyncService.publishLiveMatch(fresh)
             showBanner("Clean match created! Ready at 0/0 (0.0 overs)")
         }
     }
@@ -1633,6 +1403,11 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
     fun undoLastDelivery() {
         viewModelScope.launch {
             repository.undoLastDelivery(_selectedMatchId.value)
+            val updated = repository.getMatch(_selectedMatchId.value).firstOrNull()
+            if (updated != null) {
+                RealtimeMatchSyncService.publishMatch(updated)
+                CloudSyncService.publishLiveMatch(updated)
+            }
             showBanner("Last delivery undone by Official Scorer!")
         }
     }
@@ -1664,13 +1439,11 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         )
         _drsBroadcast.value = alert
 
-        // Update DRS review state
         _drsState.value = _drsState.value.copy(
             thirdUmpireDecision = decision,
             reviewStage = 4
         )
 
-        // If OUT, automatically count a wicket on the scoreboard!
         if (decision == "OUT") {
             val wType = when (appealType) {
                 "RUN_OUT" -> "Run Out"
@@ -1695,9 +1468,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun dismissDrsBroadcast() {
-        _drsBroadcast.value = null
-    }
+    fun dismissDrsBroadcast() { _drsBroadcast.value = null }
 
     fun togglePitchCamStreaming() {
         _isStreamingPitchCam.value = !_isStreamingPitchCam.value
@@ -1711,21 +1482,10 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         showBanner("Phone 2 Square Leg Cam: $state")
     }
 
-    fun setSpectatorCamAngle(angle: String) {
-        _spectatorCamAngle.value = angle
-    }
-
-    fun setCreaseOffset(offset: Float) {
-        _creaseOffset.value = offset
-    }
-
-    fun setDrsSelectedAngle(angle: String) {
-        _drsState.value = _drsState.value.copy(selectedCameraAngle = angle)
-    }
-
-    fun setDrsFrameIndex(frame: Int) {
-        _drsState.value = _drsState.value.copy(frameIndex = frame)
-    }
+    fun setSpectatorCamAngle(angle: String) { _spectatorCamAngle.value = angle }
+    fun setCreaseOffset(offset: Float) { _creaseOffset.value = offset }
+    fun setDrsSelectedAngle(angle: String) { _drsState.value = _drsState.value.copy(selectedCameraAngle = angle) }
+    fun setDrsFrameIndex(frame: Int) { _drsState.value = _drsState.value.copy(frameIndex = frame) }
 
     fun sendTestLiveAlert() {
         viewModelScope.launch {
@@ -1738,9 +1498,7 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun dismissBanner() {
-        _bannerAlert.value = null
-    }
+    fun dismissBanner() { _bannerAlert.value = null }
 
     private fun showBanner(msg: String) {
         _bannerAlert.value = msg

@@ -2,11 +2,14 @@ package com.example.data.repository
 
 import com.example.data.local.CricketDao
 import com.example.data.model.BallEventEntity
+import com.example.data.model.DismissedBatsman
 import com.example.data.model.HighlightClip
 import com.example.data.model.MatchEntity
 import com.example.data.model.NotificationAlertEntity
 import com.example.data.model.PlayerStatEntity
 import com.example.data.model.TeamStandingEntity
+import com.example.data.model.formatDismissedBatsmenJson
+import com.example.data.model.parseDismissedBatsmen
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -63,8 +66,8 @@ class CricketRepository(private val dao: CricketDao) {
         newBatsmanName: String? = null,
         dismissedBatsman: String? = null,
         newBatsmanOnStrike: Boolean = true
-    ) {
-        val match = dao.getMatchById(matchId).first() ?: return
+    ): MatchEntity? {
+        val match = dao.getMatchById(matchId).first() ?: return null
 
         val isWide = extraType.equals("Wide", ignoreCase = true) || extraType.equals("WD", ignoreCase = true)
         val isNoBall = extraType.equals("NoBall", ignoreCase = true) || extraType.equals("NB", ignoreCase = true)
@@ -125,6 +128,7 @@ class CricketRepository(private val dao: CricketDao) {
         var teamBPlayers = match.teamBPlayers
 
         val outBatterName = if (dismissedBatsman?.isNotBlank() == true) dismissedBatsman else match.strikerName
+        var newDismissedBatsmenJson = match.dismissedBatsmenJson
 
         if (isWicket) {
             val isStrikerOut = outBatterName.equals(match.strikerName, ignoreCase = true)
@@ -133,6 +137,35 @@ class CricketRepository(private val dao: CricketDao) {
             val remainingBalls = if (isStrikerOut) match.nonStrikerBalls else strikerBalls
             val remainingFours = if (isStrikerOut) match.nonStrikerFours else striker4s
             val remainingSixes = if (isStrikerOut) match.nonStrikerSixes else striker6s
+
+            val outRuns = if (isStrikerOut) strikerRuns else match.nonStrikerRuns
+            val outBalls = if (isStrikerOut) strikerBalls else match.nonStrikerBalls
+            val outFours = if (isStrikerOut) striker4s else match.nonStrikerFours
+            val outSixes = if (isStrikerOut) striker6s else match.nonStrikerSixes
+
+            val dismissalDesc = when {
+                wicketType.contains("Run Out", ignoreCase = true) -> "run out"
+                wicketType.contains("Caught", ignoreCase = true) -> "c Fielder b ${match.bowlerName}"
+                wicketType.contains("Bowled", ignoreCase = true) -> "b ${match.bowlerName}"
+                wicketType.contains("LBW", ignoreCase = true) -> "lbw b ${match.bowlerName}"
+                wicketType.contains("Stumped", ignoreCase = true) -> "st Keeper b ${match.bowlerName}"
+                wicketType.isNotBlank() -> "$wicketType b ${match.bowlerName}"
+                else -> "b ${match.bowlerName}"
+            }
+
+            val currentDismissedList = parseDismissedBatsmen(match.dismissedBatsmenJson).toMutableList()
+            currentDismissedList.add(
+                DismissedBatsman(
+                    name = outBatterName,
+                    runs = outRuns,
+                    balls = outBalls,
+                    fours = outFours,
+                    sixes = outSixes,
+                    dismissal = dismissalDesc,
+                    strikeRate = if (outBalls > 0) String.format("%.1f", (outRuns.toFloat() / outBalls) * 100) else "0.0"
+                )
+            )
+            newDismissedBatsmenJson = formatDismissedBatsmenJson(currentDismissedList)
 
             val squadList = (if (match.currentInnings == 1) match.teamAPlayers else match.teamBPlayers)
                 .split(",")
@@ -234,7 +267,8 @@ class CricketRepository(private val dao: CricketDao) {
             bowlerRuns = bowlerRuns,
             bowlerWickets = bowlerWickets,
             teamAPlayers = teamAPlayers,
-            teamBPlayers = teamBPlayers
+            teamBPlayers = teamBPlayers,
+            dismissedBatsmenJson = newDismissedBatsmenJson
         )
 
         dao.updateMatch(updatedMatch)
@@ -283,6 +317,7 @@ class CricketRepository(private val dao: CricketDao) {
                 )
             )
         }
+        return updatedMatch
     }
 
     suspend fun switchStrikers(matchId: String) {
@@ -631,9 +666,18 @@ class CricketRepository(private val dao: CricketDao) {
                 bowlerMaidens = 0,
                 bowlerRuns = 0,
                 bowlerWickets = 0,
-                currentInnings = 1
+                currentInnings = 1,
+                dismissedBatsmenJson = ""
             )
         )
+    }
+
+    suspend fun upsertMatchesFromFirestore(matches: List<MatchEntity>) {
+        dao.insertMatches(matches)
+    }
+
+    suspend fun upsertMatchFromFirestore(match: MatchEntity) {
+        dao.insertMatch(match)
     }
 
     suspend fun syncMatchFromCloud(dto: com.example.data.cloud.CloudMatchDto) {

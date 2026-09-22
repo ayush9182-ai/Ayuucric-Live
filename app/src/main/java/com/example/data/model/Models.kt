@@ -41,8 +41,63 @@ data class MatchEntity(
     val venue: String = "",
     val teamAFirstInningsScore: String = "",
     val teamAPlayers: String = "",
-    val teamBPlayers: String = ""
+    val teamBPlayers: String = "",
+    val dismissedBatsmenJson: String = ""
 )
+
+data class DismissedBatsman(
+    val name: String,
+    val runs: Int,
+    val balls: Int,
+    val fours: Int,
+    val sixes: Int,
+    val dismissal: String,
+    val strikeRate: String = if (balls > 0) String.format("%.1f", (runs.toFloat() / balls) * 100) else "0.0"
+)
+
+fun parseDismissedBatsmen(json: String?): List<DismissedBatsman> {
+    if (json.isNullOrBlank()) return emptyList()
+    return try {
+        val arr = org.json.JSONArray(json)
+        val list = mutableListOf<DismissedBatsman>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            val b = obj.optInt("balls", 0)
+            val r = obj.optInt("runs", 0)
+            val sr = if (b > 0) String.format("%.1f", (r.toFloat() / b) * 100) else "0.0"
+            list.add(
+                DismissedBatsman(
+                    name = obj.optString("name", "Batsman"),
+                    runs = r,
+                    balls = b,
+                    fours = obj.optInt("fours", 0),
+                    sixes = obj.optInt("sixes", 0),
+                    dismissal = obj.optString("dismissal", "out"),
+                    strikeRate = obj.optString("strikeRate", sr)
+                )
+            )
+        }
+        list
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+fun formatDismissedBatsmenJson(list: List<DismissedBatsman>): String {
+    val arr = org.json.JSONArray()
+    for (item in list) {
+        val obj = org.json.JSONObject()
+        obj.put("name", item.name)
+        obj.put("runs", item.runs)
+        obj.put("balls", item.balls)
+        obj.put("fours", item.fours)
+        obj.put("sixes", item.sixes)
+        obj.put("dismissal", item.dismissal)
+        obj.put("strikeRate", item.strikeRate)
+        arr.put(obj)
+    }
+    return arr.toString()
+}
 
 @Entity(tableName = "ball_events")
 data class BallEventEntity(

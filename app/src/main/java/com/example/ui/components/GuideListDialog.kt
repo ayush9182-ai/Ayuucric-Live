@@ -160,10 +160,10 @@ fun GuideListDialog(
                     )
 
                     GuideItem(
-                        icon = Icons.Default.MoreVert,
-                        iconTint = TextPrimary,
-                        title = "8. 3-Dot (⋮) Menu",
-                        desc = "Screen par bheed na ho isliye saare extra settings, toss, squad, network, aur reset options top right ke 3-dot menu me organize hain."
+                        icon = Icons.Default.Share,
+                        iconTint = Color(0xFF22C55E),
+                        title = "8. Share APK to Friends (No USB)",
+                        desc = "Menu (Switch bar) me 'Share APK' dabakar direct WhatsApp, Bluetooth ya Nearby Share se apne phone ki updated APK doston ko bhej sakte hain."
                     )
                 }
 
