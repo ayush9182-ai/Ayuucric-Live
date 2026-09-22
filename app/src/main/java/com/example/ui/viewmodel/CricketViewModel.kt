@@ -600,12 +600,14 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             try {
                 RealtimeMatchSyncService.observeAllMatches().collect { remoteMatches ->
                     if (remoteMatches.isNotEmpty()) {
+                        // Precedence rule: Local scorer is authoritative during active scoring session.
+                        // Non-scorer devices (Spectators, Umpires) update their local Room DB.
                         if (_currentDeviceRole.value != DeviceRole.OFFICIAL_SCORER) {
                             repository.upsertMatchesFromFirestore(remoteMatches)
                         }
-                        // If current selected match is the default placeholder or not found, auto-select latest match
+                        // If current selected match is empty or invalid, auto-select latest live/available match
                         val currentExists = remoteMatches.any { it.id == _selectedMatchId.value }
-                        if (!currentExists || _selectedMatchId.value == "match_live_1") {
+                        if (!currentExists || _selectedMatchId.value.isBlank()) {
                             val activeOrFirst = remoteMatches.firstOrNull { it.status == "LIVE" } ?: remoteMatches.first()
                             _selectedMatchId.value = activeOrFirst.id
                         }
@@ -616,27 +618,16 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        // Continuous Cloud Sync loop
+        // On-demand profile and user synchronization (event-driven, no hot loops)
         viewModelScope.launch {
-            syncCloudUsers()
-            val myProf = _userProfile.value
-            if (myProf.username.isNotBlank()) {
-                CloudSyncService.registerUserProfileInCloud(myProf)
-            }
-
-            while (true) {
-                delay(2500)
-                try {
-                    if (_currentDeviceRole.value != DeviceRole.OFFICIAL_SCORER) {
-                        val cloudMatch = CloudSyncService.fetchLiveMatchFromCloud()
-                        if (cloudMatch != null && cloudMatch.updatedAt > 0) {
-                            repository.syncMatchFromCloud(cloudMatch)
-                        }
-                    }
-                    refreshCloudMessages()
-                } catch (e: Throwable) {
-                    Log.w("CricketViewModel", "Cloud sync loop: ${e.message}")
+            try {
+                syncCloudUsers()
+                val myProf = _userProfile.value
+                if (myProf.username.isNotBlank()) {
+                    CloudSyncService.registerUserProfileInCloud(myProf)
                 }
+            } catch (e: Throwable) {
+                Log.w("CricketViewModel", "Initial user profile sync: ${e.message}")
             }
         }
     }
@@ -924,7 +915,8 @@ class CricketViewModel(application: Application) : AndroidViewModel(application)
             return true
         }
         val cleanPin = enteredPin.trim()
-        if (cleanPin == _officialPin.value.trim() || cleanPin == "AYUSH_ADMIN" || cleanPin == "8899") {
+        val expectedPin = _officialPin.value.trim()
+        if (expectedPin.isNotBlank() && cleanPin == expectedPin) {
             setDeviceRole(role)
             _isAuthorizedOfficial.value = true
             showBanner("Role Authorized! ${role.title} activated.")

@@ -84,19 +84,13 @@ fun parseDismissedBatsmen(json: String?): List<DismissedBatsman> {
 }
 
 fun formatDismissedBatsmenJson(list: List<DismissedBatsman>): String {
-    val arr = org.json.JSONArray()
-    for (item in list) {
-        val obj = org.json.JSONObject()
-        obj.put("name", item.name)
-        obj.put("runs", item.runs)
-        obj.put("balls", item.balls)
-        obj.put("fours", item.fours)
-        obj.put("sixes", item.sixes)
-        obj.put("dismissal", item.dismissal)
-        obj.put("strikeRate", item.strikeRate)
-        arr.put(obj)
+    if (list.isEmpty()) return "[]"
+    return list.joinToString(prefix = "[", postfix = "]") { item ->
+        val escapedName = item.name.replace("\\", "\\\\").replace("\"", "\\\"")
+        val escapedDismissal = item.dismissal.replace("\\", "\\\\").replace("\"", "\\\"")
+        val escapedSr = item.strikeRate.replace("\\", "\\\\").replace("\"", "\\\"")
+        """{"name":"$escapedName","runs":${item.runs},"balls":${item.balls},"fours":${item.fours},"sixes":${item.sixes},"dismissal":"$escapedDismissal","strikeRate":"$escapedSr"}"""
     }
-    return arr.toString()
 }
 
 @Entity(tableName = "ball_events")
