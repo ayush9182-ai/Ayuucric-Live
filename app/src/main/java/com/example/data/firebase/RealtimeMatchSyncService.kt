@@ -59,12 +59,13 @@ object RealtimeMatchSyncService {
                 "teamAPlayers" to match.teamAPlayers,
                 "teamBPlayers" to match.teamBPlayers,
                 "dismissedBatsmenJson" to match.dismissedBatsmenJson,
-                "updatedAt" to System.currentTimeMillis()
+                "updatedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "revision" to com.google.firebase.firestore.FieldValue.increment(1)
             )
 
             firestore.collection("live_matches")
                 .document(match.id)
-                .set(matchData)
+                .set(matchData, com.google.firebase.firestore.SetOptions.merge())
                 .addOnSuccessListener {
                     Log.d(TAG, "Match published to Firebase: ${match.id} -> ${match.score}/${match.wickets}")
                 }
@@ -72,10 +73,13 @@ object RealtimeMatchSyncService {
                     Log.w(TAG, "Failed to publish match to Firebase: ${e.message}")
                 }
 
-            // Also record the ball event under subcollection "balls" if provided
+            // Record the ball event idempotently under subcollections "deliveries" and "balls"
             if (ballEvent != null) {
+                val deliveryId = "${match.id}_inn${match.currentInnings}_ov${ballEvent.overNumber}_b${ballEvent.ballInOver}_${ballEvent.id}"
                 val ballData = hashMapOf(
+                    "deliveryId" to deliveryId,
                     "matchId" to ballEvent.matchId,
+                    "innings" to match.currentInnings,
                     "overNumber" to ballEvent.overNumber,
                     "ballInOver" to ballEvent.ballInOver,
                     "runs" to ballEvent.runs,
@@ -89,13 +93,23 @@ object RealtimeMatchSyncService {
                     "pitchZone" to ballEvent.pitchZone,
                     "isBoundary" to ballEvent.isBoundary,
                     "isSix" to ballEvent.isSix,
-                    "timestamp" to System.currentTimeMillis()
+                    "timestamp" to System.currentTimeMillis(),
+                    "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                 )
 
+                // Write to deliveries subcollection idempotently
+                firestore.collection("live_matches")
+                    .document(match.id)
+                    .collection("deliveries")
+                    .document(deliveryId)
+                    .set(ballData, com.google.firebase.firestore.SetOptions.merge())
+
+                // Also maintain balls subcollection with the same deterministic document ID
                 firestore.collection("live_matches")
                     .document(match.id)
                     .collection("balls")
-                    .add(ballData)
+                    .document(deliveryId)
+                    .set(ballData, com.google.firebase.firestore.SetOptions.merge())
             }
         } catch (e: Exception) {
             Log.w(TAG, "publishMatch exception: ${e.message}")

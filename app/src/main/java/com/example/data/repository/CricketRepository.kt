@@ -447,35 +447,6 @@ class CricketRepository(private val dao: CricketDao) {
         dao.insertMatch(match)
     }
 
-    suspend fun syncMatchFromCloud(dto: com.example.data.cloud.CloudMatchDto) {
-        val existing = dao.getMatchById(dto.matchId).first()
-        if (existing != null) {
-            val overs = "${dto.legalBalls / 6}.${dto.legalBalls % 6}"
-            val updated = existing.copy(
-                score = dto.score,
-                wickets = dto.wickets,
-                legalBalls = dto.legalBalls,
-                totalOvers = dto.totalOvers,
-                target = dto.target,
-                strikerName = dto.strikerName,
-                strikerRuns = dto.strikerRuns,
-                strikerBalls = dto.strikerBalls,
-                strikerFours = dto.strikerFours,
-                strikerSixes = dto.strikerSixes,
-                nonStrikerName = dto.nonStrikerName,
-                nonStrikerRuns = dto.nonStrikerRuns,
-                nonStrikerBalls = dto.nonStrikerBalls,
-                bowlerName = dto.bowlerName,
-                bowlerRuns = dto.bowlerRuns,
-                bowlerBalls = dto.bowlerBalls,
-                bowlerWickets = dto.bowlerWickets,
-                status = dto.status,
-                statusDetail = "${dto.battingTeam} batting • ${dto.score}/${dto.wickets} ($overs ov)"
-            )
-            dao.updateMatch(updated)
-        }
-    }
-
     companion object {
         val sampleMatch = MatchEntity(
             id = "match_live_1",

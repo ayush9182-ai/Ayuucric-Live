@@ -247,6 +247,7 @@ data class DrsReviewState(
 
 data class CricHeroesProfile(
     val id: String = "player_1",
+    val uid: String = id, // Immutable Firebase / Auth UID
     val username: String = "", // Unique username e.g. @ayush_7
     val mobileNumber: String = "",
     val fullName: String = "",
@@ -282,27 +283,32 @@ data class RoleChangeRequest(
 // Public match banter message & Direct Real-time Chat
 data class ChatMessage(
     val id: String,
+    val senderUid: String = "",
+    val senderUsername: String = "",
     val senderName: String,
     val senderRole: String = "Fan",
     val avatarEmoji: String = "🏏",
     val message: String,
     val isFromMe: Boolean = false,
     val timestamp: Long = System.currentTimeMillis(),
-    val reaction: String? = null
+    val reaction: String? = null,
+    val status: String = "SENT" // SENDING, SENT, FAILED
 ) {
     val text: String get() = message
-    val senderUsername: String get() = senderName
 }
 
 // Real 1-on-1 Instagram-Style Personal Direct Message (DM)
 data class DirectPersonalMessage(
     val id: String,
+    val senderUid: String = "",
+    val recipientUid: String = "",
     val senderUsername: String,
     val recipientUsername: String,
     val text: String,
     val timestamp: Long = System.currentTimeMillis(),
     val isRead: Boolean = false,
-    val reactionEmoji: String? = null
+    val reactionEmoji: String? = null,
+    val status: String = "SENT" // SENDING, SENT, FAILED
 )
 
 // Hotstar-Style Live Broadcast Graphic Overlays (TV Lower-Thirds)
