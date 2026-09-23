@@ -1,107 +1,82 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
-    function isAuthenticated() {
+    function signedIn() {
       return request.auth != null;
     }
 
-    function isOwner(uid) {
-      return isAuthenticated() && request.auth.uid == uid;
+    function admin() {
+      return signedIn() && request.auth.token.admin == true;
     }
 
-    function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.admin == true ||
-        request.auth.token.email == 'ayushsunil591983@gmail.com'
-      );
+    function scorer() {
+      return signedIn() && (request.auth.token.role == 'scorer' || admin());
     }
 
-    function isOfficialScorer() {
-      return isAuthenticated() && (
-        request.auth.token.role == 'scorer' ||
-        isAdmin()
-      );
+    function threadMember(threadId) {
+      return signedIn() && exists(/databases/$(database)/documents/direct_chats/$(threadId))
+        && request.auth.uid in get(/databases/$(database)/documents/direct_chats/$(threadId)).data.participants;
     }
 
-    // 1. User Profiles (`users/{uid}`)
     match /users/{uid} {
-      // Any authenticated or anonymous user can read profiles
-      allow read: if true;
-      // Users can only create or edit their own profile
-      allow write: if isOwner(uid) || isAdmin();
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if admin() || (signedIn() && request.auth.uid == uid);
     }
 
-    // 2. Live Matches (`live_matches/{matchId}`)
     match /live_matches/{matchId} {
-      // Live cricket match score is public for all spectators
       allow read: if true;
-      // Only official scorers or admins can update match state
-      allow write: if isOfficialScorer() || isAdmin() || (
-        isAuthenticated() && (
-          resource == null || resource.data.scorerUid == request.auth.uid || request.resource.data.scorerUid == request.auth.uid
-        )
-      );
+      allow create, update: if scorer();
+      allow delete: if admin();
 
-      // Subcollection: Deliveries / Balls
       match /deliveries/{deliveryId} {
         allow read: if true;
-        allow write: if isOfficialScorer() || isAdmin() || isAuthenticated();
+        allow create: if scorer()
+          && request.resource.data.scorerUid == request.auth.uid;
+        allow update, delete: if admin();
       }
 
       match /balls/{ballId} {
         allow read: if true;
-        allow write: if isOfficialScorer() || isAdmin() || isAuthenticated();
+        allow create: if scorer()
+          && request.resource.data.scorerUid == request.auth.uid;
+        allow update, delete: if admin();
       }
     }
 
-    // 3. Live Match Banter Chat (`matches/{matchId}/live_chat/{messageId}`)
     match /matches/{matchId}/live_chat/{messageId} {
-      // Spectators can read banter messages
-      allow read: if true;
-      // Authenticated users can post messages
-      allow create: if isAuthenticated() &&
-        request.resource.data.message is string &&
-        request.resource.data.message.size() > 0 &&
-        request.resource.data.message.size() <= 500 &&
-        (request.resource.data.senderUid == request.auth.uid || request.resource.data.senderUid == '');
-      // Only sender or admin can delete
-      allow delete: if isAdmin() || (
-        isAuthenticated() && resource.data.senderUid == request.auth.uid
-      );
-      allow update: if false; // Messages are immutable
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.message is string
+        && request.resource.data.message.size() > 0
+        && request.resource.data.message.size() <= 500;
+      allow delete: if admin() || (signedIn() && resource.data.senderUid == request.auth.uid);
+      allow update: if false;
     }
 
-    // 4. 1-on-1 Direct Messaging (`direct_chats/{threadId}`)
     match /direct_chats/{threadId} {
-      // Only participants can read or update thread metadata
-      allow read, write: if isAuthenticated() && (
-        threadId.matches('.*' + request.auth.uid + '.*') ||
-        isAdmin()
-      );
+      allow create: if signedIn()
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.auth.uid in request.resource.data.participants;
+      allow read, update: if threadMember(threadId) || admin();
+      allow delete: if admin();
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated() && (
-          threadId.matches('.*' + request.auth.uid + '.*') ||
-          isAdmin()
-        );
-        allow create: if isAuthenticated() && (
-          request.resource.data.senderUid == request.auth.uid ||
-          threadId.matches('.*' + request.auth.uid + '.*')
-        );
-        allow delete: if isAdmin() || (
-          isAuthenticated() && resource.data.senderUid == request.auth.uid
-        );
+        allow read: if threadMember(threadId) || admin();
+        allow create: if threadMember(threadId)
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.recipientUid is string;
+        allow delete: if admin() || (threadMember(threadId) && resource.data.senderUid == request.auth.uid);
         allow update: if false;
       }
     }
 
-    // 5. App Role Change Requests (`role_requests/{requestId}`)
     match /role_requests/{requestId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.applicantUid == request.auth.uid);
-      allow create: if isAuthenticated();
-      allow update, delete: if isAdmin();
+      allow create: if signedIn() && request.resource.data.applicantUid == request.auth.uid;
+      allow read: if admin() || (signedIn() && resource.data.applicantUid == request.auth.uid);
+      allow update, delete: if admin();
     }
   }
 }
