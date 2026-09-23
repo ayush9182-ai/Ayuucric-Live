@@ -219,26 +219,116 @@ class CricketRepository(private val dao: CricketDao) {
     }
 
     suspend fun undoLastDelivery(matchId: String) {
-        val currentEvents = dao.getBallEventsForMatch(matchId).first()
-        val lastEvent = currentEvents.firstOrNull() ?: return
         val match = dao.getMatchById(matchId).first() ?: return
+        val currentEvents = dao.getBallEventsForMatch(matchId).first()
+        if (currentEvents.isEmpty()) return
 
         dao.deleteLastBallEvent(matchId)
+        val remainingEvents = dao.getBallEventsAscending(matchId)
 
-        val isLegal = lastEvent.extraType != "Wide" && lastEvent.extraType != "NoBall"
-        val restoredBalls = if (isLegal && match.legalBalls > 0) match.legalBalls - 1 else match.legalBalls
-        val restoredScore = (match.score - lastEvent.runs).coerceAtLeast(0)
-        val restoredWickets = if (lastEvent.isWicket && match.wickets > 0) match.wickets - 1 else match.wickets
-
-        dao.updateMatch(
-            match.copy(
-                score = restoredScore,
-                wickets = restoredWickets,
-                legalBalls = restoredBalls,
+        if (remainingEvents.isEmpty()) {
+            val cleanMatch = match.copy(
+                score = 0,
+                wickets = 0,
+                legalBalls = 0,
+                strikerRuns = 0,
+                strikerBalls = 0,
+                strikerFours = 0,
+                strikerSixes = 0,
+                nonStrikerRuns = 0,
+                nonStrikerBalls = 0,
+                nonStrikerFours = 0,
+                nonStrikerSixes = 0,
+                bowlerBalls = 0,
+                bowlerRuns = 0,
+                bowlerWickets = 0,
+                bowlerMaidens = 0,
                 status = "LIVE",
-                statusDetail = "Delivery undone by Official Scorer"
+                statusDetail = "${match.battingTeam} batting • 0/0 (0.0 ov)"
             )
+            dao.updateMatch(cleanMatch)
+            return
+        }
+
+        // Replay and recalculate full state from remaining immutable events
+        var totalScore = 0
+        var totalWickets = 0
+        var totalLegalBalls = 0
+        var strikerRuns = 0
+        var strikerBalls = 0
+        var strikerFours = 0
+        var strikerSixes = 0
+        var nonStrikerRuns = 0
+        var nonStrikerBalls = 0
+        var nonStrikerFours = 0
+        var nonStrikerSixes = 0
+        var bowlerRuns = 0
+        var bowlerBalls = 0
+        var bowlerWickets = 0
+
+        for (event in remainingEvents) {
+            val isWide = event.extraType.equals("Wide", ignoreCase = true) || event.extraType.equals("WD", ignoreCase = true)
+            val isNoBall = event.extraType.equals("NoBall", ignoreCase = true) || event.extraType.equals("NB", ignoreCase = true)
+            val isBye = event.extraType.equals("Bye", ignoreCase = true) || event.extraType.equals("B", ignoreCase = true)
+            val isLegBye = event.extraType.equals("LegBye", ignoreCase = true) || event.extraType.equals("LB", ignoreCase = true)
+            val isLegal = !isWide && !isNoBall
+
+            val penalty = if (isWide || isNoBall) 1 else 0
+            val runsAdded = event.runs + penalty
+            totalScore += runsAdded
+
+            if (event.isWicket) {
+                totalWickets = (totalWickets + 1).coerceAtMost(10)
+            }
+            if (isLegal) {
+                totalLegalBalls++
+            }
+
+            // Striker vs non-striker tracking
+            val isCurrentStriker = event.batsman.equals(match.strikerName, ignoreCase = true)
+            val isCurrentNonStriker = event.batsman.equals(match.nonStrikerName, ignoreCase = true)
+            if (isCurrentStriker) {
+                if (!isWide && !isBye && !isLegBye) strikerRuns += event.runs
+                if (!isWide) strikerBalls++
+                if (event.runs == 4 && !isBye && !isLegBye) strikerFours++
+                if (event.runs == 6 && !isBye && !isLegBye) strikerSixes++
+            } else if (isCurrentNonStriker) {
+                if (!isWide && !isBye && !isLegBye) nonStrikerRuns += event.runs
+                if (!isWide) nonStrikerBalls++
+                if (event.runs == 4 && !isBye && !isLegBye) nonStrikerFours++
+                if (event.runs == 6 && !isBye && !isLegBye) nonStrikerSixes++
+            }
+
+            // Bowler tracking
+            if (event.bowler.equals(match.bowlerName, ignoreCase = true)) {
+                if (isLegal) bowlerBalls++
+                if (!isBye && !isLegBye) bowlerRuns += runsAdded
+                if (event.isWicket && !event.wicketType.equals("Run Out", ignoreCase = true)) {
+                    bowlerWickets++
+                }
+            }
+        }
+
+        val oversFormatted = "${totalLegalBalls / 6}.${totalLegalBalls % 6}"
+        val updatedMatch = match.copy(
+            score = totalScore,
+            wickets = totalWickets,
+            legalBalls = totalLegalBalls,
+            strikerRuns = strikerRuns,
+            strikerBalls = strikerBalls,
+            strikerFours = strikerFours,
+            strikerSixes = strikerSixes,
+            nonStrikerRuns = nonStrikerRuns,
+            nonStrikerBalls = nonStrikerBalls,
+            nonStrikerFours = nonStrikerFours,
+            nonStrikerSixes = nonStrikerSixes,
+            bowlerRuns = bowlerRuns,
+            bowlerBalls = bowlerBalls,
+            bowlerWickets = bowlerWickets,
+            status = "LIVE",
+            statusDetail = "${match.battingTeam} batting • $totalScore/$totalWickets ($oversFormatted ov)"
         )
+        dao.updateMatch(updatedMatch)
     }
 
     suspend fun updateNewBatsman(matchId: String, newBatsmanName: String, isStriker: Boolean = true) {

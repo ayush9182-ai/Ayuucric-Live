@@ -33,6 +33,9 @@ interface CricketDao {
     @Query("SELECT * FROM ball_events WHERE matchId = :matchId ORDER BY id DESC")
     fun getBallEventsForMatch(matchId: String): Flow<List<BallEventEntity>>
 
+    @Query("SELECT * FROM ball_events WHERE matchId = :matchId ORDER BY id ASC")
+    suspend fun getBallEventsAscending(matchId: String): List<BallEventEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBallEvent(ballEvent: BallEventEntity)
 

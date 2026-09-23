@@ -25,11 +25,24 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-            storeFile = file(keystorePath)
-            storePassword = System.getenv("STORE_PASSWORD")
-            keyAlias = "upload"
-            keyPassword = System.getenv("KEY_PASSWORD")
+            val keystorePath = System.getenv("KEYSTORE_PATH")
+            val storePass = System.getenv("STORE_PASSWORD")
+            val keyPass = System.getenv("KEY_PASSWORD")
+            val keyAliasName = System.getenv("KEY_ALIAS") ?: "upload"
+
+            if (keystorePath != null && file(keystorePath).exists() && !storePass.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = storePass
+                keyAlias = keyAliasName
+                keyPassword = if (!keyPass.isNullOrBlank()) keyPass else storePass
+            } else {
+                // Play App Signing / CI fallback for local test artifacts
+                val debugKeystore = file("${rootDir}/debug.keystore")
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
         create("debugConfig") {
             storeFile = file("${rootDir}/debug.keystore")
@@ -76,7 +89,7 @@ secrets {
 }
 
 googleServices { 
-    missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN 
+    missingGoogleServicesStrategy = MissingGoogleServicesStrategy.ERROR 
 }
 
 dependencies {

@@ -175,6 +175,41 @@ fun DrsReviewScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Prominent Protocol Simulation Mode Indicator
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, StadiumGold.copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "🔬", fontSize = 16.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = "SAFETY SIMULATION MODE: PROTOCOL SIMULATOR",
+                        color = StadiumGold,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.6.sp
+                    )
+                    Text(
+                        text = "Ball-tracking trajectories & UltraEdge audio waveforms are calibrated mathematical simulations for gully/turf matches. Official verdicts are adjudicated by Phone 4 (Third Umpire) to Firestore.",
+                        color = TextSecondary,
+                        fontSize = 9.sp,
+                        lineHeight = 12.sp
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(14.dp))
 
         // Tabs: Live Umpire Broadcast vs Sandbox Predictor

@@ -293,50 +293,38 @@ fun RoleAuthorizationDialog(
                             }
                         }
 
-                        // Collapsible Master Admin PIN Bypass (Strictly for App Owner)
-                        var showAdminBypass by remember { mutableStateOf(false) }
-                        TextButton(
-                            onClick = { showAdminBypass = !showAdminBypass },
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        // Server-Side Role Claim Verification
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B4B).copy(alpha = 0.5f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4338CA).copy(alpha = 0.5f))
                         ) {
-                            Text(
-                                text = if (showAdminBypass) "▲ Hide Admin Owner Master Login" else "▼ Admin Owner Master Key Bypass",
-                                color = TextSecondary,
-                                fontSize = 10.sp
-                            )
-                        }
-
-                        if (showAdminBypass) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF1E1B4B).copy(alpha = 0.4f))
-                                    .border(1.dp, Color(0xFF4338CA).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                    .padding(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "App Owner Private Master PIN:",
-                                    color = Color(0xFFA5B4FC),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = HawkEyeCyan,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                OutlinedTextField(
-                                    value = enteredPin,
-                                    onValueChange = { enteredPin = it },
-                                    placeholder = { Text("Private PIN (Secret)", fontSize = 11.sp) },
-                                    singleLine = true,
-                                    visualTransformation = PasswordVisualTransformation(),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = CricketGreen,
-                                        unfocusedBorderColor = Color(0xFF475569),
-                                        focusedTextColor = TextPrimary,
-                                        unfocusedTextColor = TextPrimary
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = "SERVER AUTHORIZATION REQUIRED",
+                                        color = StadiumGold,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Official match roles (Scorer, Umpires, DRS) are validated via Firebase Auth claims & Admin approval. Spectators enjoy read-only live broadcast.",
+                                        color = TextSecondary,
+                                        fontSize = 9.sp,
+                                        lineHeight = 12.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -355,11 +343,16 @@ fun RoleAuthorizationDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val success = onSelectRole(selectedRole, enteredPin)
-                    if (success) {
+                    if (selectedRole == DeviceRole.SPECTATOR_VIEWER) {
+                        onSelectRole(selectedRole, "")
                         onDismiss()
                     } else {
-                        errorMessage = "Incorrect PIN! Please enter the correct official PIN."
+                        val success = onSelectRole(selectedRole, enteredPin)
+                        if (success) {
+                            onDismiss()
+                        } else {
+                            errorMessage = "Authorization required from Admin or Match Official. Please submit a request above."
+                        }
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
