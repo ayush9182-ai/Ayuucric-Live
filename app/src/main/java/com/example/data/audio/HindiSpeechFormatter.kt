@@ -18,6 +18,9 @@ object HindiSpeechFormatter {
 
         // Sidhu Paaji trademark exclamations to pure Devanagari
         val replacements = listOf(
+            Regex("(?i)\\bHat[- ]?trick\\b") to "हैट्रिक",
+            Regex("(?i)\\bTurning\\s+point\\b") to "टर्निंग पॉइंट",
+            Regex("(?i)\\bThrill[a-z]*\\b") to "रोमांचक",
             Regex("(?i)\\bOye\\s+guru\\s+khataak\\b") to "ओए गुरु खटाक!",
             Regex("(?i)\\bOye\\s+guru\\b") to "ओए गुरु!",
             Regex("(?i)\\bThoko\\s+taali\\s+guru\\b") to "ठोको ताली गुरु!",

@@ -78,7 +78,9 @@ fun ScorerControllerSheet(
     bowlerName: String,
     onChangeBowler: () -> Unit = {},
     onChangeBatsman: () -> Unit = {},
-    onOpenNewBatsmanDialog: (String) -> Unit = {}
+    onOpenNewBatsmanDialog: (String) -> Unit = {},
+    onStartSecondInnings: (() -> Unit)? = null,
+    isFirstInnings: Boolean = false
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -457,6 +459,26 @@ fun ScorerControllerSheet(
                     Icon(imageVector = Icons.Default.Policy, contentDescription = null, tint = HawkEyeCyan, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Call DRS", color = HawkEyeCyan, fontSize = 11.sp)
+                }
+            }
+
+            if (isFirstInnings && isAuthorized && onStartSecondInnings != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = {
+                        onDismiss()
+                        onStartSecondInnings()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, StadiumGold),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = StadiumGold)
+                ) {
+                    Icon(Icons.Default.SportsCricket, contentDescription = null, tint = StadiumGold, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("🏏 1st Innings Khatam / Start 2nd Innings ➡️", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
 

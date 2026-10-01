@@ -61,11 +61,86 @@ class EdgeTtsManager(private val context: Context) {
 
     fun isPlaying(): Boolean = isPlayingAudio
 
+    fun buildExpressiveSsml(
+        text: String,
+        voice: String,
+        basePitch: String = "+0Hz",
+        baseRate: String = "+0%",
+        autoExpressivePitch: Boolean = true
+    ): String {
+        val lang = if (voice.startsWith("hi-")) "hi-IN" else "en-IN"
+        if (!autoExpressivePitch) {
+            val escapedText = escapeXml(text)
+            return "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='$lang'>" +
+                    "<voice name='$voice'>" +
+                    "<prosody pitch='$basePitch' rate='$baseRate'>$escapedText</prosody>" +
+                    "</voice></speak>"
+        }
+
+        val rawPhrases = text.split(Regex("(?<=[!?।.\n])\\s+")).filter { it.isNotBlank() }
+        val sb = StringBuilder()
+        sb.append("<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='$lang'>")
+        sb.append("<voice name='$voice'>")
+
+        if (rawPhrases.isEmpty()) {
+            val escaped = escapeXml(text)
+            sb.append("<prosody pitch='$basePitch' rate='$baseRate'>$escaped</prosody>")
+        } else {
+            for ((idx, phrase) in rawPhrases.withIndex()) {
+                val lower = phrase.lowercase()
+                val escapedPhrase = escapeXml(phrase.trim())
+                if (escapedPhrase.isBlank()) continue
+
+                val isShout = lower.contains("ओए गुरु") || lower.contains("oye guru") ||
+                        lower.contains("हैट्रिक") || lower.contains("hattrick") ||
+                        lower.contains("out") || lower.contains("आउट") ||
+                        lower.contains("बोल्ड") || lower.contains("bowled") ||
+                        lower.contains("गया गया") || lower.contains("चक दे") ||
+                        lower.contains("छक्का") || lower.contains("six") ||
+                        lower.contains("बाप रे") || lower.contains("धमाका") ||
+                        lower.contains("खटाक") || lower.contains("पछाड़") ||
+                        phrase.contains("!")
+
+                val isTurningPoint = lower.contains("टर्निंग पॉइंट") || lower.contains("turning point") ||
+                        lower.contains("सांसें") || lower.contains("रोमांचक") ||
+                        lower.contains("अंतिम ओवर") || lower.contains("पासा पलट") ||
+                        lower.contains("इतिहास") || lower.contains("दबाव")
+
+                val isPunchline = lower.contains("ठोको ताली") || lower.contains("thoko taali") ||
+                        lower.contains("नप दे किल्ली") || lower.contains("ताली") ||
+                        lower.contains("शायरी") || lower.contains("कहावत") ||
+                        (idx == rawPhrases.lastIndex && rawPhrases.size > 1)
+
+                val (segPitch, segRate) = when {
+                    isShout -> Pair("+28Hz", "+12%")
+                    isTurningPoint -> Pair("+15Hz", "+6%")
+                    isPunchline -> Pair("-7Hz", "-2%")
+                    idx == 0 -> Pair("+16Hz", "+8%")
+                    else -> Pair("+3Hz", "+1%")
+                }
+
+                sb.append("<prosody pitch='$segPitch' rate='$segRate'>$escapedPhrase </prosody>")
+            }
+        }
+
+        sb.append("</voice></speak>")
+        return sb.toString()
+    }
+
+    private fun escapeXml(text: String): String {
+        return text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
+    }
+
     fun synthesizeAndPlay(
         text: String,
         voice: String = "hi-IN-MadhurNeural",
         pitch: String = "+0Hz",
         rate: String = "+0%",
+        autoPitchExpression: Boolean = true,
         onStart: () -> Unit,
         onDone: () -> Unit,
         onError: (String) -> Unit
@@ -80,13 +155,6 @@ class EdgeTtsManager(private val context: Context) {
             val requestId = UUID.randomUUID().toString().replace("-", "")
             val connectionId = UUID.randomUUID().toString().replace("-", "")
             val secMsGec = generateSecMsGec()
-
-            val escapedText = text
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&apos;")
 
             val wsUrl = "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1" +
                     "?TrustedClientToken=$TRUSTED_CLIENT_TOKEN" +
@@ -123,12 +191,8 @@ class EdgeTtsManager(private val context: Context) {
                             "{\"context\":{\"synthesis\":{\"audio\":{\"metadataoptions\":{\"sentenceBoundaryEnabled\":\"false\",\"wordBoundaryEnabled\":\"false\"},\"outputFormat\":\"audio-24khz-48kbitrate-mono-mp3\"}}}}"
                     webSocket.send(configMsg)
 
-                    // Send SSML with Microsoft Edge Neural voice (e.g. hi-IN-MadhurNeural)
-                    val lang = if (voice.startsWith("hi-")) "hi-IN" else "en-IN"
-                    val ssml = "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='$lang'>" +
-                            "<voice name='$voice'>" +
-                            "<prosody pitch='$pitch' rate='$rate'>$escapedText</prosody>" +
-                            "</voice></speak>"
+                    // Send multi-pitch expressive SSML with Microsoft Edge Neural voice
+                    val ssml = buildExpressiveSsml(text, voice, pitch, rate, autoPitchExpression)
                     val ssmlMsg = "X-RequestId:$requestId\r\nContent-Type:application/ssml+xml\r\nPath:ssml\r\n\r\n$ssml"
                     webSocket.send(ssmlMsg)
                 }

@@ -39,11 +39,40 @@ data class MatchEntity(
     val bowlerRuns: Int = 0,
     val bowlerWickets: Int = 0,
     val venue: String = "",
+    val matchDate: String = "",
+    val matchTime: String = "",
+    val venueAddress: String = "",
+    val venueCoordinates: String = "",
     val teamAFirstInningsScore: String = "",
     val teamAPlayers: String = "",
     val teamBPlayers: String = "",
     val dismissedBatsmenJson: String = ""
-)
+) {
+    fun getEffectiveTeamAShort(): String {
+        val candidate = teamAShort.trim()
+        return if (candidate.isNotBlank() && candidate != "TEA" && candidate != "TMA") candidate
+        else generateTeamCode(teamA, "T1")
+    }
+
+    fun getEffectiveTeamBShort(): String {
+        val candidate = teamBShort.trim()
+        return if (candidate.isNotBlank() && candidate != "TEA" && candidate != "TMB") candidate
+        else generateTeamCode(teamB, "T2")
+    }
+}
+
+fun generateTeamCode(teamName: String, fallback: String = "TM"): String {
+    val clean = teamName.trim()
+    if (clean.isBlank()) return fallback
+    val words = clean.split("\\s+".toRegex()).filter { it.isNotBlank() }
+    return when {
+        words.size >= 2 -> {
+            words.map { it.first().uppercaseChar() }.joinToString("").take(4)
+        }
+        clean.length <= 4 -> clean.uppercase()
+        else -> clean.take(3).uppercase()
+    }
+}
 
 data class DismissedBatsman(
     val name: String,
@@ -249,6 +278,7 @@ data class CricHeroesProfile(
     val id: String = "player_1",
     val uid: String = id, // Immutable Firebase / Auth UID
     val username: String = "", // Unique username e.g. @ayush_7
+    val pin: String = "", // 4-digit security PIN for username login & recovery
     val mobileNumber: String = "",
     val fullName: String = "",
     val jerseyName: String = "",
@@ -265,9 +295,11 @@ data class CricHeroesProfile(
     val wickets: Int = 0,
     val strikeRate: Double = 0.0,
     val isVerified: Boolean = true,
-    val isOnline: Boolean = true
+    val isOnline: Boolean = true,
+    val isGuest: Boolean = false
 ) {
     val phoneNumber: String get() = if (mobileNumber.isNotBlank()) mobileNumber else "+919876543210"
+    val isAccountLinked: Boolean get() = isVerified && mobileNumber.isNotBlank() && mobileNumber != "Unlinked"
 }
 
 data class RoleChangeRequest(
@@ -280,22 +312,7 @@ data class RoleChangeRequest(
     val status: String = "PENDING" // "PENDING", "APPROVED", "DENIED"
 )
 
-// Public match banter message & Direct Real-time Chat
-data class ChatMessage(
-    val id: String,
-    val senderUid: String = "",
-    val senderUsername: String = "",
-    val senderName: String,
-    val senderRole: String = "Fan",
-    val avatarEmoji: String = "🏏",
-    val message: String,
-    val isFromMe: Boolean = false,
-    val timestamp: Long = System.currentTimeMillis(),
-    val reaction: String? = null,
-    val status: String = "SENT" // SENDING, SENT, FAILED
-) {
-    val text: String get() = message
-}
+// Public match banter message & Direct Real-time Chat model is in ChatMessage.kt
 
 // Real 1-on-1 Instagram-Style Personal Direct Message (DM)
 data class DirectPersonalMessage(
@@ -326,8 +343,45 @@ data class BroadcastOverlayEvent(
         MAXIMUM_SIX,
         BOUNDARY_FOUR,
         WICKET_DISMISSAL,
-        PARTNERSHIP_RECORD
+        PARTNERSHIP_RECORD,
+        DRS_DECISION
     }
 }
+
+// Global Broadcast DRS Decision Card shown across all spectator & official phones
+data class DrsDecisionCardData(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val matchId: String = "",
+    val appealType: String = "LBW", // "LBW", "CAUGHT_BEHIND", "RUN_OUT"
+    val batsman: String = "Batter",
+    val bowler: String = "Bowler",
+    val onFieldDecision: String = "NOT OUT",
+    val thirdUmpireDecision: String = "OUT", // "OUT", "NOT OUT", "UMPIRES_CALL"
+    val pitching: String = "IN_LINE",
+    val impact: String = "IN_LINE",
+    val wickets: String = "HITTING",
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+data class CreateMatchParams(
+    val name: String,
+    val teamA: String,
+    val teamB: String,
+    val overs: Int,
+    val striker: String,
+    val nonStriker: String,
+    val bowler: String,
+    val venue: String,
+    val pin: String,
+    val battingTeam: String = "",
+    val bowlingTeam: String = "",
+    val tossDetail: String = "",
+    val teamAPlayers: String = "",
+    val teamBPlayers: String = "",
+    val matchDate: String = "",
+    val matchTime: String = "",
+    val venueAddress: String = "",
+    val venueCoordinates: String = ""
+)
 
 

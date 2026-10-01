@@ -1,10 +1,18 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import com.google.android.play.core.appupdate.AppUpdateInfo
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -79,6 +87,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +102,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.example.data.model.BallEventEntity
 import com.example.data.model.DeviceRole
 import com.example.data.model.MatchEntity
@@ -107,6 +118,7 @@ import com.example.ui.components.CoinFlipperDialog
 import com.example.ui.components.CreateMatchDialog
 import com.example.ui.components.DetailedScorecardView
 import com.example.ui.components.DrsBroadcastOverlay
+import com.example.ui.components.DrsDecisionBroadcastCard
 import com.example.ui.components.DrsReviewScreen
 import com.example.ui.components.GuideListDialog
 import com.example.data.model.CricHeroesProfile
@@ -115,19 +127,21 @@ import com.example.ui.components.CricHeroesProfileDialog
 import com.example.ui.components.DirectPersonalMessagingDialog
 import com.example.ui.components.HighlightsReelScreen
 import com.example.ui.components.InAppUpdateDialog
-import com.example.ui.components.InstagramMatchChatDialog
 import com.example.ui.components.LiveCenterTab
 import com.example.ui.components.LiveMatchBroadcastPlayer
+import com.example.ui.components.EditMatchVenueDialog
 import com.example.ui.components.LiveMatchesFeedScreen
 import com.example.ui.components.MatchSwitcherBottomSheet
 import com.example.ui.components.MessagesCenterDialog
 import com.example.ui.components.NetworkStatusDialog
 import com.example.ui.components.PlayerProfileCardDialog
+import com.example.ui.components.PlayerHistoricalStatsDialog
 import com.example.ui.components.PlayingSquadDialog
 import com.example.ui.components.RoleAuthorizationDialog
 import com.example.ui.components.RoleRequestsDialog
 import com.example.ui.components.ScoreBanner
 import com.example.ui.components.ScorerControllerSheet
+import com.example.ui.components.StartSecondInningsDialog
 import com.example.ui.components.ChangeBowlerDialog
 import com.example.ui.components.NewBatsmanDialog
 import com.example.ui.components.ChangeBatsmanDialog
@@ -158,15 +172,109 @@ import com.example.ui.viewmodel.LiveCenterSubTab
 class MainActivity : ComponentActivity() {
 
     private val viewModel: CricketViewModel by viewModels()
+    private lateinit var playAppUpdateManager: AppUpdateManager
+
+    private val playUpdateLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK) {
+            android.util.Log.w(
+                "MainActivity",
+                "Google Play Immediate Update flow not completed (code: ${result.resultCode}). Re-checking to enforce update..."
+            )
+            // In Immediate update mode, if the user cancels or closes, re-check to enforce update
+            checkForPlayStoreImmediateUpdate()
+        } else {
+            android.util.Log.d("MainActivity", "Google Play Immediate Update completed successfully!")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        initPlayStoreInAppUpdates()
+
+        if (intent.getBooleanExtra("OPEN_PROFILE_CARD", false)) {
+            viewModel.openPlayerProfileCard(viewModel.userProfile.value)
+        }
+
         setContent {
             CricTrackTheme(darkTheme = true) {
                 CricketAppContent(viewModel = viewModel)
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkPlayStoreUpdateInProgress()
+    }
+
+    private fun initPlayStoreInAppUpdates() {
+        try {
+            playAppUpdateManager = AppUpdateManagerFactory.create(this)
+            checkForPlayStoreImmediateUpdate()
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "Play AppUpdateManager initialization notice: ${e.message}")
+        }
+    }
+
+    private fun checkForPlayStoreImmediateUpdate() {
+        if (!::playAppUpdateManager.isInitialized) return
+        try {
+            val appUpdateInfoTask = playAppUpdateManager.appUpdateInfo
+            appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+                if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                    && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                ) {
+                    try {
+                        val updateOptions = AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build()
+                        playAppUpdateManager.startUpdateFlowForResult(
+                            appUpdateInfo,
+                            playUpdateLauncher,
+                            updateOptions
+                        )
+                    } catch (flowEx: Throwable) {
+                        android.util.Log.e("MainActivity", "Failed to start Play Store immediate update flow: ${flowEx.message}")
+                    }
+                }
+            }.addOnFailureListener { err ->
+                android.util.Log.d("MainActivity", "Play Store in-app update check notice: ${err.message}")
+            }
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "checkForPlayStoreImmediateUpdate exception: ${e.message}")
+        }
+    }
+
+    private fun checkPlayStoreUpdateInProgress() {
+        if (!::playAppUpdateManager.isInitialized) return
+        try {
+            playAppUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+                if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                    // If an immediate update is already in progress, resume the flow
+                    try {
+                        val updateOptions = AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build()
+                        playAppUpdateManager.startUpdateFlowForResult(
+                            appUpdateInfo,
+                            playUpdateLauncher,
+                            updateOptions
+                        )
+                    } catch (flowEx: Throwable) {
+                        android.util.Log.e("MainActivity", "Failed to resume Play Store immediate update flow: ${flowEx.message}")
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "checkPlayStoreUpdateInProgress exception: ${e.message}")
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("OPEN_PROFILE_CARD", false)) {
+            viewModel.openPlayerProfileCard(viewModel.userProfile.value)
         }
     }
 }
@@ -194,6 +302,7 @@ fun CricketAppContent(viewModel: CricketViewModel) {
     val notifyMilestones by viewModel.notifyMilestones.collectAsStateWithLifecycle()
     val notifyDrs by viewModel.notifyDrs.collectAsStateWithLifecycle()
     val bannerAlert by viewModel.bannerAlert.collectAsStateWithLifecycle()
+    val liveMatchAlert by viewModel.liveMatchAlert.collectAsStateWithLifecycle()
 
     // Multi-Phone Local Match Roles & Camera State
     val currentRole by viewModel.currentDeviceRole.collectAsStateWithLifecycle()
@@ -202,6 +311,7 @@ fun CricketAppContent(viewModel: CricketViewModel) {
     val showCreateMatchDialog by viewModel.showCreateMatchDialog.collectAsStateWithLifecycle()
     var showResetConfirmDialog by remember { mutableStateOf(false) }
     val drsBroadcast by viewModel.drsBroadcast.collectAsStateWithLifecycle()
+    val drsDecisionPopup by viewModel.drsDecisionPopup.collectAsStateWithLifecycle()
     val isStreamingPitchCam by viewModel.isStreamingPitchCam.collectAsStateWithLifecycle()
     val isStreamingSideCam by viewModel.isStreamingSideCam.collectAsStateWithLifecycle()
     val spectatorCamAngle by viewModel.spectatorCamAngle.collectAsStateWithLifecycle()
@@ -236,13 +346,26 @@ fun CricketAppContent(viewModel: CricketViewModel) {
     val personalMessages by viewModel.personalMessages.collectAsStateWithLifecycle()
     val communityPlayers by viewModel.communityPlayers.collectAsStateWithLifecycle()
     val activeDmRecipient by viewModel.activeDmRecipient.collectAsStateWithLifecycle()
+    val unreadDmCounts by viewModel.unreadDmCounts.collectAsStateWithLifecycle()
+    val lastDmMessageBySender by viewModel.lastDmMessageBySender.collectAsStateWithLifecycle()
+    val lastDmTimestampBySender by viewModel.lastDmTimestampBySender.collectAsStateWithLifecycle()
+    val totalUnreadDmCount by viewModel.totalUnreadDmCount.collectAsStateWithLifecycle()
     val roleRequests by viewModel.roleRequests.collectAsStateWithLifecycle()
     val showRoleRequestsDialog by viewModel.showRoleRequestsDialog.collectAsStateWithLifecycle()
     val showPlayingSquadDialog by viewModel.showPlayingSquadDialog.collectAsStateWithLifecycle()
+    val showStartSecondInningsDialog by viewModel.showStartSecondInningsDialog.collectAsStateWithLifecycle()
+    val isRefreshingStandings by viewModel.isRefreshingStandings.collectAsStateWithLifecycle()
+    val showEditVenueDialog by viewModel.showEditVenueDialog.collectAsStateWithLifecycle()
+    val editingMatchVenue by viewModel.editingMatchVenue.collectAsStateWithLifecycle()
+    val groundSearchResults by viewModel.groundSearchResults.collectAsStateWithLifecycle()
+    val isSearchingGrounds by viewModel.isSearchingGrounds.collectAsStateWithLifecycle()
     val showCoinFlipperDialog by viewModel.showCoinFlipperDialog.collectAsStateWithLifecycle()
     val viewingPlayerCard by viewModel.viewingPlayerCard.collectAsStateWithLifecycle()
+    val viewingHistoricalPlayer by viewModel.viewingHistoricalPlayer.collectAsStateWithLifecycle()
     val showMessagesHub by viewModel.showMessagesHub.collectAsStateWithLifecycle()
     val messagesHubTab by viewModel.messagesHubTab.collectAsStateWithLifecycle()
+    val isDmMuted by viewModel.isDmMuted.collectAsStateWithLifecycle()
+    val isMatchStartMuted by viewModel.isMatchStartMuted.collectAsStateWithLifecycle()
     val showWhatsAppShareDialog by viewModel.showWhatsAppShareDialog.collectAsStateWithLifecycle()
     val showWagonWheelDialog by viewModel.showWagonWheelDialog.collectAsStateWithLifecycle()
     val activeBroadcastOverlay by viewModel.activeBroadcastOverlay.collectAsStateWithLifecycle()
@@ -252,6 +375,39 @@ fun CricketAppContent(viewModel: CricketViewModel) {
     val showChangeBatsmanDialog by viewModel.showChangeBatsmanDialog.collectAsStateWithLifecycle()
     var showMatchSwitcherModal by remember { mutableStateOf(false) }
     var showGuideDialog by remember { mutableStateOf(false) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            com.example.notification.CricLiveBackgroundService.start(context)
+            currentMatch?.let { match ->
+                if (match.status == "LIVE") {
+                    com.example.notification.MatchNotificationHelper.notifyMatchLive(context, match, forceNotify = true)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        com.example.notification.CricLiveBackgroundService.start(context)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val isGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!isGranted) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.Default) {
+            viewModel.initTtsCommentary()
+        }
+    }
 
     if (showLoginScreen) {
         CricHeroesLoginScreen(
@@ -270,9 +426,9 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                 currentRole = currentRole,
                 networkStatus = networkStatus,
                 userProfile = userProfile,
-                unreadMessagesCount = chatMessages.size.coerceAtMost(9),
+                unreadMessagesCount = totalUnreadDmCount.coerceAtMost(99),
                 onOpenNetworkDialog = { viewModel.setShowNetworkDialog(true) },
-                onOpenMessagesHub = { viewModel.openMessagesHub(0) },
+                onOpenMessagesHub = { viewModel.openMessagesHub(if (totalUnreadDmCount > 0) 1 else 0) },
                 onOpenRoleDialog = { viewModel.setShowRoleDialog(true) },
                 onOpenProfileDialog = { viewModel.setShowProfileDialog(true) },
                 onOpenMatchSwitcher = { showMatchSwitcherModal = true },
@@ -340,7 +496,11 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                         onOpenAiSummary = {
                             viewModel.selectMatch(it)
                             viewModel.setShowSummaryDialog(true)
-                        }
+                        },
+                        currentRole = currentRole,
+                        onDeleteMatch = { viewModel.deleteMatch(it) },
+                        onSyncCloud = { viewModel.syncMatchesFromCloud() },
+                        onEditVenue = { match -> viewModel.openEditVenueDialog(match) }
                     )
                 }
 
@@ -357,7 +517,16 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                         isVideoOverlayExpanded = isVideoOverlayExpanded,
                         onToggleVideoOverlay = { viewModel.toggleVideoOverlayExpanded() },
                         onSelectFilter = { viewModel.setCommentaryFilter(it) },
-                        onOpenScorer = { viewModel.setScorerSheetVisible(true) },
+                        onOpenScorer = {
+                            if (currentMatch?.status == "FINISHED") {
+                                viewModel.showBanner("🏆 Match khatam ho chuka hai! Ab scoring band hai.")
+                            } else if (currentMatch?.status == "INNINGS_BREAK") {
+                                viewModel.showBanner("🏏 1st Innings samapt! 'Start 2nd Innings' par tap karein.")
+                                viewModel.openStartSecondInningsDialog()
+                            } else {
+                                viewModel.setScorerSheetVisible(true)
+                            }
+                        },
                         onOpenDrsReview = {
                             viewModel.selectTab(AppScreenTab.DRS_SYSTEM)
                             viewModel.startDrsReview("LBW", currentMatch?.strikerName ?: "Batter", currentMatch?.bowlerName ?: "Bowler")
@@ -396,7 +565,10 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                         },
                         onChangeBowler = { viewModel.openChangeBowlerDialog() },
                         onChangeBatsman = { viewModel.openChangeBatsmanDialog() },
-                        onOpenNewBatsmanDialog = { viewModel.openNewBatsmanDialog("Bowled") }
+                        onOpenNewBatsmanDialog = { viewModel.openNewBatsmanDialog("Bowled") },
+                        onSwitchBattingTeam = { viewModel.switchBattingTeamAtZero() },
+                        onStartSecondInnings = { viewModel.openStartSecondInningsDialog() },
+                        onEditVenue = { viewModel.openEditVenueDialog(currentMatch) }
                     )
                 }
 
@@ -439,7 +611,8 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                         },
                         onOpenRoleDialog = { viewModel.setShowRoleDialog(true) },
                         onSelectCameraAngle = { angle -> viewModel.setDrsSelectedAngle(angle) },
-                        onSetFrameIndex = { frame -> viewModel.setDrsFrameIndex(frame) }
+                        onSetFrameIndex = { frame -> viewModel.setDrsFrameIndex(frame) },
+                        onBackToMatch = { viewModel.selectTab(AppScreenTab.LIVE_CENTER) }
                     )
                 }
 
@@ -477,7 +650,9 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                         notifyDrs = notifyDrs,
                         onToggleNotification = { viewModel.toggleNotification(it) },
                         onSendTestAlert = { viewModel.sendTestLiveAlert() },
-                        onClearAllRecords = { viewModel.clearAllStandingsAndStats() }
+                        onClearAllRecords = { viewModel.clearAllStandingsAndStats() },
+                        isRefreshingStandings = isRefreshingStandings,
+                        onRefreshStandings = { viewModel.refreshStandingsFromFirestore() }
                     )
                 }
             }
@@ -553,7 +728,7 @@ fun CricketAppContent(viewModel: CricketViewModel) {
             }
 
             // Scorer Bottom Sheet (Authorized for Phone 3: Official Scorer)
-            if (showScorerSheet) {
+            if (showScorerSheet && currentMatch?.status != "FINISHED" && currentMatch?.status != "INNINGS_BREAK") {
                 ScorerControllerSheet(
                     onDismiss = { viewModel.setScorerSheetVisible(false) },
                     onRecordBall = { runs, isWkt, wType, extra, angle, zone ->
@@ -578,7 +753,9 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     bowlerName = currentMatch?.bowlerName ?: "Bowler",
                     onChangeBowler = { viewModel.openChangeBowlerDialog() },
                     onChangeBatsman = { viewModel.openChangeBatsmanDialog() },
-                    onOpenNewBatsmanDialog = { wType -> viewModel.openNewBatsmanDialog(wType) }
+                    onOpenNewBatsmanDialog = { wType -> viewModel.openNewBatsmanDialog(wType) },
+                    onStartSecondInnings = { viewModel.openStartSecondInningsDialog() },
+                    isFirstInnings = currentMatch?.currentInnings == 1
                 )
             }
 
@@ -682,6 +859,16 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     onDeleteMatchMessage = { viewModel.deleteMatchChatMessage(it) },
                     onDeleteDirectMessage = { viewModel.deleteDirectMessage(it) },
                     onRefreshUsers = { viewModel.syncCloudUsers() },
+                    isDmMuted = isDmMuted,
+                    onToggleDmMute = { viewModel.toggleDmMute() },
+                    onSendDirectMessageWithMedia = { recipient, text, mediaUrl, mediaType, isSnap ->
+                        viewModel.sendDirectMessage(recipient, text, mediaUrl, mediaType, isSnap)
+                    },
+                    onMarkSnapOpened = { viewModel.markSnapOpened(it) },
+                    unreadDmCounts = unreadDmCounts,
+                    lastDmMessageBySender = lastDmMessageBySender,
+                    lastDmTimestampBySender = lastDmTimestampBySender,
+                    onMarkAllDmsRead = { viewModel.markAllDmsAsRead() },
                     onDismiss = {
                         viewModel.closeMessagesHub()
                         viewModel.setShowChatDialog(false)
@@ -690,7 +877,18 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                 )
             }
 
-            // Compact Match Switcher & Unified Management Sheet
+            // 2nd Innings Transition Dialog (Authorized Official Scorer)
+            if (showStartSecondInningsDialog && currentMatch != null) {
+                StartSecondInningsDialog(
+                    match = currentMatch!!,
+                    onDismiss = { viewModel.closeStartSecondInningsDialog() },
+                    onConfirmStartSecondInnings = { striker, nonStriker, bowler ->
+                        viewModel.startSecondInnings(striker, nonStriker, bowler)
+                    }
+                )
+            }
+
+            // Compact Match Switcher & Unified Management Sheet (More Section)
             if (showMatchSwitcherModal) {
                 MatchSwitcherBottomSheet(
                     matches = allMatches,
@@ -704,6 +902,18 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     onOpenCreateMatch = { viewModel.setShowCreateMatchDialog(true) },
                     onOpenLogin = { viewModel.setShowLoginScreen(true) },
                     onOpenAiSettings = { viewModel.setShowAiSettingsDialog(true) },
+                    isSidhuCommentaryEnabled = isSidhuCommentaryEnabled,
+                    isSidhuSpeaking = isSidhuSpeaking,
+                    sidhuCurrentDialogue = sidhuCurrentDialogue,
+                    sidhuVoiceStyle = sidhuVoiceStyle,
+                    onToggleSidhuCommentary = { viewModel.toggleSidhuCommentary(it) },
+                    onSelectSidhuStyle = { viewModel.setSidhuVoiceStyle(it) },
+                    onTestSidhuVoice = { viewModel.testSidhuCommentary() },
+                    isMatchStartMuted = isMatchStartMuted,
+                    onToggleMatchStartMute = { viewModel.toggleMatchStartMute() },
+                    isDmMuted = isDmMuted,
+                    onToggleDmMute = { viewModel.toggleDmMute() },
+                    onDeleteMatch = { viewModel.deleteMatch(it) },
                     onDismiss = { showMatchSwitcherModal = false }
                 )
             }
@@ -712,19 +922,32 @@ fun CricketAppContent(viewModel: CricketViewModel) {
             if (showCreateMatchDialog) {
                 CreateMatchDialog(
                     onDismiss = { viewModel.setShowCreateMatchDialog(false) },
-                    onCreateMatch = { name, teamA, teamB, overs, striker, nonStriker, bowler, venue, pin ->
-                        viewModel.resetAllAndStartFresh(
-                            name = name,
-                            teamA = teamA,
-                            teamB = teamB,
-                            overs = overs,
-                            striker = striker,
-                            nonStriker = nonStriker,
-                            bowler = bowler,
-                            venue = venue,
-                            pin = pin
-                        )
+                    onCreateMatch = { params ->
+                        viewModel.resetAllAndStartFresh(params)
                     }
+                )
+            }
+
+            // Edit Match Venue, Date, Time & Google Maps Grounding Dialog
+            if (showEditVenueDialog && editingMatchVenue != null) {
+                EditMatchVenueDialog(
+                    match = editingMatchVenue!!,
+                    onDismiss = { viewModel.closeEditVenueDialog() },
+                    onSaveVenue = { venue, date, time, address, coordinates ->
+                        viewModel.updateMatchVenue(
+                            matchId = editingMatchVenue!!.id,
+                            venue = venue,
+                            date = date,
+                            time = time,
+                            address = address,
+                            coordinates = coordinates
+                        )
+                    },
+                    onSearchGrounds = { query ->
+                        viewModel.searchGroundsWithMaps(query)
+                    },
+                    searchResults = groundSearchResults,
+                    isSearching = isSearchingGrounds
                 )
             }
 
@@ -764,6 +987,24 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                         viewModel.closePlayerProfileCard()
                         viewModel.openDirectMessageWith(player)
                         viewModel.setShowDmDialog(true)
+                    },
+                    onViewHistoricalStats = { player ->
+                        viewModel.closePlayerProfileCard()
+                        viewModel.openHistoricalStatsForPlayer(player)
+                    }
+                )
+            }
+
+            // Comprehensive Player Historical Batting & Bowling Stats Dialog (Firestore Backed)
+            if (viewingHistoricalPlayer != null) {
+                PlayerHistoricalStatsDialog(
+                    playerIdOrUsername = viewingHistoricalPlayer!!.id.ifBlank { viewingHistoricalPlayer!!.username },
+                    initialProfile = viewingHistoricalPlayer,
+                    onDismiss = { viewModel.closeHistoricalStats() },
+                    onOpenDmWithPlayer = { player ->
+                        viewModel.closeHistoricalStats()
+                        viewModel.openDirectMessageWith(player)
+                        viewModel.setShowDmDialog(true)
                     }
                 )
             }
@@ -784,14 +1025,14 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = CricketGreen)
-                            Text("Reset Match to 0/0?", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text("Reset Match?", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         }
                     },
                     text = {
                         Text(
-                            "Kya aap saare purane demo records saaf karke 0 runs, 0 wickets aur 0.0 overs se bilkul naya live match shuru karna chahte hain?",
+                            "Reset score, wickets, and overs to 0 to restart this live match?",
                             color = TextSecondary,
-                            fontSize = 14.sp
+                            fontSize = 13.sp
                         )
                     },
                     confirmButton = {
@@ -803,7 +1044,7 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                             colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Haan, Reset 0-0 Karein", color = PitchDark, fontWeight = FontWeight.Bold)
+                            Text("Reset Match", color = PitchDark, fontWeight = FontWeight.Bold)
                         }
                     },
                     dismissButton = {
@@ -884,6 +1125,14 @@ fun CricketAppContent(viewModel: CricketViewModel) {
                 alert = drsBroadcast,
                 onDismiss = { viewModel.dismissDrsBroadcast() }
             )
+
+            // Global Broadcast DRS Decision Card shown across all spectator & official phones
+            if (drsDecisionPopup != null && drsBroadcast == null) {
+                DrsDecisionBroadcastCard(
+                    decision = drsDecisionPopup!!,
+                    onDismiss = { viewModel.dismissDrsDecisionPopup() }
+                )
+            }
 
             // WhatsApp Match Summary Card & Poster Dialog
             if (showWhatsAppShareDialog && currentMatch != null) {
@@ -970,25 +1219,6 @@ fun BottomBroadcastNavigation(
                 selectedIconColor = PitchDark,
                 selectedTextColor = DrsOutRed,
                 indicatorColor = DrsOutRed,
-                unselectedIconColor = TextSecondary,
-                unselectedTextColor = TextSecondary
-            )
-        )
-
-        NavigationBarItem(
-            selected = currentTab == AppScreenTab.CAMERA_UMPIRE,
-            onClick = { onSelectTab(AppScreenTab.CAMERA_UMPIRE) },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = "Umpire Camera"
-                )
-            },
-            label = { Text("Camera", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = PitchDark,
-                selectedTextColor = CricketGreen,
-                indicatorColor = CricketGreen,
                 unselectedIconColor = TextSecondary,
                 unselectedTextColor = TextSecondary
             )

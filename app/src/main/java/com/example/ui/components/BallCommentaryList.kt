@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,6 +32,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -60,6 +63,8 @@ fun BallCommentaryList(
     onSelectFilter: (CommentaryFilter) -> Unit,
     onOpenScorer: () -> Unit,
     onOpenDrsReview: () -> Unit,
+    isOfficialScorer: Boolean = false,
+    isMatchFinished: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val filteredBalls = when (selectedFilter) {
@@ -70,35 +75,61 @@ fun BallCommentaryList(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Scorer & DRS Action Bar
+        // Scorer & DRS Action Bar (Scorer Button ONLY for Official Scorer)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Button(
-                onClick = onOpenScorer,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(44.dp)
-                    .testTag("open_scorer_sheet_btn"),
-                colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Scorer Panel",
-                    tint = PitchDark,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Record Ball (Scorer)",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PitchDark
-                )
+            if (isOfficialScorer) {
+                if (isMatchFinished) {
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        color = Color(0xFF1E293B),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, StadiumGold.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🏆 Match Samapt (Finished)",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = StadiumGold
+                            )
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = onOpenScorer,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .testTag("open_scorer_sheet_btn"),
+                        colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Scorer Panel",
+                            tint = PitchDark,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Record Ball (Scorer)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PitchDark
+                        )
+                    }
+                }
             }
 
             OutlinedButton(

@@ -77,18 +77,6 @@ fun ZeroDelayLiveRadar(
 ) {
     var viewMode by remember { mutableStateOf("3D Pitch") } // "3D Pitch" or "Field Radar"
 
-    val infiniteTransition = rememberInfiniteTransition(label = "pitchRadarAnim")
-    val internalPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "internalAnimPhase"
-    )
-    val effectivePhase = animPhase ?: internalPhase
-
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -158,74 +146,10 @@ fun ZeroDelayLiveRadar(
             Spacer(modifier = Modifier.height(10.dp))
 
             // Canvas Display: 3D Pitch or Field Radar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF0B1726))
-                    .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(14.dp))
-            ) {
-                if (viewMode == "3D Pitch") {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        draw3DPitchSimulation(effectivePhase)
-                    }
-                } else {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawFieldRadarSimulation(effectivePhase)
-                    }
-                }
-
-                // Speed & Delivery Telemetry Overlay
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xCC000000))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Speed,
-                            contentDescription = "Speed",
-                            tint = HawkEyeCyan,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "137.4 km/h • Good Length",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = HawkEyeCyan
-                        )
-                    }
-                }
-
-                // Delivery Status Pill (e.g., Bowler Running / Pitched / Shot Played)
-                val statusText = when {
-                    effectivePhase < 0.25f -> "Bowler Run-up & Release"
-                    effectivePhase < 0.55f -> "Pitched (Good Length)"
-                    effectivePhase < 0.85f -> "Cover Drive Placed!"
-                    else -> "Fielder Intercepting..."
-                }
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xCC0A192F))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = statusText,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = TextPrimary
-                    )
-                }
-            }
+            RadarSimulationViewport(
+                viewMode = viewMode,
+                animPhase = animPhase
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -533,3 +457,92 @@ private fun DrawScope.drawFieldRadarSimulation(phase: Float) {
         )
     }
 }
+
+@Composable
+private fun RadarSimulationViewport(
+    viewMode: String,
+    animPhase: Float?,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pitchRadarAnim")
+    val internalPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "internalAnimPhase"
+    )
+    val effectivePhase = animPhase ?: internalPhase
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF0B1726))
+            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(14.dp))
+    ) {
+        if (viewMode == "3D Pitch") {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                draw3DPitchSimulation(effectivePhase)
+            }
+        } else {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawFieldRadarSimulation(effectivePhase)
+            }
+        }
+
+        // Speed & Delivery Telemetry Overlay
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xCC000000))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Speed,
+                    contentDescription = "Speed",
+                    tint = HawkEyeCyan,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "137.4 km/h • Good Length",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = HawkEyeCyan
+                )
+            }
+        }
+
+        // Delivery Status Pill
+        val statusText = when {
+            effectivePhase < 0.25f -> "Bowler Run-up & Release"
+            effectivePhase < 0.55f -> "Pitched (Good Length)"
+            effectivePhase < 0.85f -> "Cover Drive Placed!"
+            else -> "Fielder Intercepting..."
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xCC0A192F))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = statusText,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextPrimary
+            )
+        }
+    }
+}
+

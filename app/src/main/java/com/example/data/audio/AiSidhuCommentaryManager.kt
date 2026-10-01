@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnInitListener {
@@ -22,11 +23,19 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
     private val scope = CoroutineScope(Dispatchers.Main)
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
+    private var isInitializing = false
+    private var pendingSpeechText: String? = null
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val prefs: SharedPreferences = context.getSharedPreferences("ayuu_sidhu_voice_prefs", Context.MODE_PRIVATE)
 
     private val edgeTtsManager = EdgeTtsManager(context)
+
+    init {
+        scope.launch(Dispatchers.Default) {
+            initializeTts()
+        }
+    }
 
     private val _isCommentaryEnabled = MutableStateFlow(true)
     val isCommentaryEnabled = _isCommentaryEnabled.asStateFlow()
@@ -56,58 +65,84 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
     private val _voiceGender = MutableStateFlow(prefs.getString(KEY_GENDER, "MALE") ?: "MALE")
     val voiceGender = _voiceGender.asStateFlow()
 
-    init {
+    private val _isAutoPitchEnabled = MutableStateFlow(prefs.getBoolean(KEY_AUTO_PITCH, true))
+    val isAutoPitchEnabled = _isAutoPitchEnabled.asStateFlow()
+
+    /**
+     * Initializes the TextToSpeech engine in a background coroutine (Dispatchers.Default)
+     * after UI load to prevent blocking the main thread or causing any UI frame drops.
+     */
+    suspend fun initializeTts() = withContext(Dispatchers.Default) {
+        if (tts != null || isInitializing || isTtsReady) return@withContext
+        isInitializing = true
         try {
-            tts = TextToSpeech(context.applicationContext, this)
+            Log.d("AiSidhuCommentary", "Initializing TextToSpeech engine on Dispatchers.Default...")
+            tts = TextToSpeech(context.applicationContext, this@AiSidhuCommentaryManager)
         } catch (e: Exception) {
-            Log.e("AiSidhuCommentary", "TTS init error: ${e.message}")
+            isInitializing = false
+            Log.e("AiSidhuCommentary", "TTS background initialization error: ${e.message}")
         }
     }
 
     override fun onInit(status: Int) {
+        isInitializing = false
         if (status == TextToSpeech.SUCCESS) {
-            tts?.let { engine ->
-                // Try Hindi first for authentic Sidhu Paaji voice
-                val hindiLocale = Locale("hi", "IN")
-                val result = engine.setLanguage(hindiLocale)
-                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    engine.setLanguage(Locale("en", "IN"))
+            scope.launch(Dispatchers.Default) {
+                tts?.let { engine ->
+                    try {
+                        // Try Hindi first for authentic Sidhu Paaji voice
+                        val hindiLocale = Locale("hi", "IN")
+                        val result = engine.setLanguage(hindiLocale)
+                        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                            engine.setLanguage(Locale("en", "IN"))
+                        }
+
+                        // Select male voice on background thread
+                        selectAppropriateVoice(engine)
+
+                        // Audio attributes for media playback so it plays in background
+                        val audioAttributes = AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                        engine.setAudioAttributes(audioAttributes)
+
+                        // Apply deep male baritone pitch & articulate speed
+                        engine.setPitch(_currentPitch.value)
+                        engine.setSpeechRate(_currentSpeed.value)
+
+                        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                            override fun onStart(utteranceId: String?) {
+                                scope.launch { _isSpeaking.value = true }
+                            }
+
+                            override fun onDone(utteranceId: String?) {
+                                scope.launch { _isSpeaking.value = false }
+                            }
+
+                            @Deprecated("Deprecated in Java")
+                            override fun onError(utteranceId: String?) {
+                                scope.launch { _isSpeaking.value = false }
+                            }
+
+                            override fun onError(utteranceId: String?, errorCode: Int) {
+                                scope.launch { _isSpeaking.value = false }
+                            }
+                        })
+
+                        isTtsReady = true
+                        Log.d("AiSidhuCommentary", "TextToSpeech & Voice selection initialized successfully on Dispatchers.Default")
+
+                        val pending = pendingSpeechText
+                        if (!pending.isNullOrBlank()) {
+                            pendingSpeechText = null
+                            val utteranceId = "sidhu_init_${System.currentTimeMillis()}"
+                            tts?.speak(pending, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("AiSidhuCommentary", "Error configuring TTS engine: ${e.message}")
+                    }
                 }
-
-                // Select male voice if available in Android TTS engine
-                selectAppropriateVoice(engine)
-
-                // Audio attributes for media playback so it plays in background
-                val audioAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-                engine.setAudioAttributes(audioAttributes)
-
-                // Apply deep male baritone pitch & articulate speed
-                engine.setPitch(_currentPitch.value)
-                engine.setSpeechRate(_currentSpeed.value)
-
-                engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {
-                        scope.launch { _isSpeaking.value = true }
-                    }
-
-                    override fun onDone(utteranceId: String?) {
-                        scope.launch { _isSpeaking.value = false }
-                    }
-
-                    @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) {
-                        scope.launch { _isSpeaking.value = false }
-                    }
-
-                    override fun onError(utteranceId: String?, errorCode: Int) {
-                        scope.launch { _isSpeaking.value = false }
-                    }
-                })
-
-                isTtsReady = true
             }
         }
     }
@@ -174,18 +209,27 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
     fun setVoiceGender(gender: String) {
         _voiceGender.value = gender
         prefs.edit().putString(KEY_GENDER, gender).apply()
-        tts?.let { selectAppropriateVoice(it) }
+        scope.launch(Dispatchers.Default) {
+            tts?.let { selectAppropriateVoice(it) }
+        }
+    }
+
+    fun toggleAutoPitch(enabled: Boolean? = null) {
+        val newState = enabled ?: !_isAutoPitchEnabled.value
+        _isAutoPitchEnabled.value = newState
+        prefs.edit().putBoolean(KEY_AUTO_PITCH, newState).apply()
     }
 
     fun resetToSidhuDefaults() {
         setCustomPitch(0.88f)
         setCustomSpeed(1.0f)
         setVoiceGender("MALE")
+        toggleAutoPitch(true)
         testVoiceSample()
     }
 
     fun testVoiceSample() {
-        speak("ओए गुरु! ठोको ताली गुरु! मैं हूँ सिद्धू पाजी, माइक्रोसॉफ्ट एज की मधुर आवाज़ में! चक दे फट्टे!")
+        speak("ओए गुरु! हैट्रिक हो गई गुरु! ठोको ताली! मैं हूँ सिद्धू पाजी, माइक्रोसॉफ्ट एज की मधुर आवाज़ में! चक दे फट्टे!")
     }
 
     fun setVoiceStyle(style: SidhuVoiceStyle) {
@@ -212,7 +256,12 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
 
         try {
             requestAudioFocus()
-            val speechReadyText = HindiSpeechFormatter.formatForHindiTts(text)
+            // Strip any dialogue display prefixes like "🎙️ सिद्धू पाजी (Gemini AI):"
+            val cleanRaw = text
+                .replace(Regex("(?i)^[🎙️\\s]*सिद्धू\\s+पाजी\\s*\\([^)]+\\)\\s*:\\s*"), "")
+                .replace(Regex("(?i)^[🎙️\\s]*Sidhu\\s+Paaji\\s*[^:]*:\\s*"), "")
+                .trim()
+            val speechReadyText = HindiSpeechFormatter.formatForHindiTts(cleanRaw)
 
             // Primary: Microsoft Edge Madhur Neural (Male Hindi) online voice
             val edgeVoice = if (_voiceGender.value == "FEMALE") "hi-IN-SwaraNeural" else "hi-IN-MadhurNeural"
@@ -227,6 +276,7 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
                 voice = edgeVoice,
                 pitch = prosodyPitch,
                 rate = prosodyRate,
+                autoPitchExpression = _isAutoPitchEnabled.value,
                 onStart = {
                     scope.launch {
                         _isSpeaking.value = true
@@ -246,20 +296,73 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
             )
         } catch (e: Exception) {
             Log.e("AiSidhuCommentary", "Speak dispatch error: ${e.message}")
-            val speechReadyText = HindiSpeechFormatter.formatForHindiTts(text)
+            val cleanRaw = text
+                .replace(Regex("(?i)^[🎙️\\s]*सिद्धू\\s+पाजी\\s*\\([^)]+\\)\\s*:\\s*"), "")
+                .trim()
+            val speechReadyText = HindiSpeechFormatter.formatForHindiTts(cleanRaw)
             speakViaLocalTts(speechReadyText, flush)
         }
     }
 
     private fun speakViaLocalTts(speechReadyText: String, flush: Boolean) {
         if (!isTtsReady || tts == null) {
-            Log.w("AiSidhuCommentary", "Local TTS not ready")
+            Log.w("AiSidhuCommentary", "Local TTS not ready, queuing speech and scheduling initialization")
+            pendingSpeechText = speechReadyText
+            scope.launch(Dispatchers.Default) {
+                initializeTts()
+            }
             return
         }
         try {
-            val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-            val utteranceId = "sidhu_${System.currentTimeMillis()}"
-            tts?.speak(speechReadyText, queueMode, null, utteranceId)
+            val engine = tts ?: return
+            val basePitch = _currentPitch.value
+            val baseSpeed = _currentSpeed.value
+
+            if (!_isAutoPitchEnabled.value) {
+                engine.setPitch(basePitch)
+                engine.setSpeechRate(baseSpeed)
+                val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+                engine.speak(speechReadyText, queueMode, null, "sidhu_${System.currentTimeMillis()}")
+                return
+            }
+
+            // Auto Pitch Modulation for Android Local TTS
+            val phrases = speechReadyText.split(Regex("(?<=[!?।.\n])\\s+")).filter { it.isNotBlank() }
+            if (phrases.isEmpty()) {
+                val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+                engine.speak(speechReadyText, queueMode, null, "sidhu_${System.currentTimeMillis()}")
+                return
+            }
+
+            for ((idx, phrase) in phrases.withIndex()) {
+                val lower = phrase.lowercase()
+                val isShout = lower.contains("ओए गुरु") || lower.contains("हैट्रिक") ||
+                        lower.contains("आउट") || lower.contains("बोल्ड") ||
+                        lower.contains("गया") || lower.contains("चक दे") ||
+                        lower.contains("छक्का") || lower.contains("बाप रे") ||
+                        lower.contains("धमाका") || phrase.contains("!")
+
+                val isPunchline = lower.contains("ठोको ताली") || lower.contains("किल्ली") ||
+                        lower.contains("शायरी") || (idx == phrases.lastIndex && phrases.size > 1)
+
+                val phrasePitch = when {
+                    isShout -> (basePitch * 1.30f).coerceIn(0.55f, 1.6f)
+                    isPunchline -> (basePitch * 0.88f).coerceIn(0.55f, 1.6f)
+                    idx == 0 -> (basePitch * 1.15f).coerceIn(0.55f, 1.6f)
+                    else -> basePitch
+                }
+
+                val phraseSpeed = when {
+                    isShout -> (baseSpeed * 1.12f).coerceIn(0.6f, 1.5f)
+                    isPunchline -> (baseSpeed * 0.95f).coerceIn(0.6f, 1.5f)
+                    else -> baseSpeed
+                }
+
+                engine.setPitch(phrasePitch)
+                engine.setSpeechRate(phraseSpeed)
+                val qMode = if (idx == 0 && flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+                engine.speak(phrase, qMode, null, "sidhu_${System.currentTimeMillis()}_$idx")
+            }
         } catch (e: Exception) {
             Log.e("AiSidhuCommentary", "Local TTS speak error: ${e.message}")
         }
@@ -327,13 +430,16 @@ class AiSidhuCommentaryManager(private val context: Context) : TextToSpeech.OnIn
         try {
             tts?.stop()
             tts?.shutdown()
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            android.util.Log.w("AiSidhuCommentary", "Error shutting down TextToSpeech: ${e.message}", e)
+        }
     }
 
     companion object {
         private const val KEY_PITCH = "sidhu_custom_pitch"
         private const val KEY_SPEED = "sidhu_custom_speed"
         private const val KEY_GENDER = "sidhu_voice_gender"
+        private const val KEY_AUTO_PITCH = "sidhu_auto_pitch_expression"
     }
 }
 

@@ -34,6 +34,7 @@ fun PlayerProfileCardDialog(
     profile: CricHeroesProfile,
     onDismiss: () -> Unit,
     onOpenDmWithPlayer: ((CricHeroesProfile) -> Unit)? = null,
+    onViewHistoricalStats: ((CricHeroesProfile) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Dialog(
@@ -320,6 +321,34 @@ fun PlayerProfileCardDialog(
 
                 // Action Buttons
                 Spacer(modifier = Modifier.height(16.dp))
+
+                if (onViewHistoricalStats != null) {
+                    Button(
+                        onClick = {
+                            onViewHistoricalStats(profile)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = StadiumGold),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = PitchDark,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Historical Batting & Bowling Stats 📊",
+                            color = PitchDark,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.5.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 if (onOpenDmWithPlayer != null) {
                     Button(

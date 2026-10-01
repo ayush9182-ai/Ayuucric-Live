@@ -81,12 +81,12 @@ fun StandingsAndLeaderboardScreen(
     onToggleNotification: (String) -> Unit,
     onSendTestAlert: () -> Unit,
     onClearAllRecords: () -> Unit = {},
+    isRefreshingStandings: Boolean = false,
+    onRefreshStandings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Points Table, 1: Fan Leaderboard, 2: Alerts
     var showClearDialog by remember { mutableStateOf(false) }
-
-    val scrollState = rememberScrollState()
 
     if (showClearDialog) {
         androidx.compose.material3.AlertDialog(
@@ -126,8 +126,7 @@ fun StandingsAndLeaderboardScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
             .testTag("standings_and_leaderboard_screen")
     ) {
         // Quick Action Row for Table & Stats
@@ -178,34 +177,62 @@ fun StandingsAndLeaderboardScreen(
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("Points Table", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                text = { Text("Points Table 🏆", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("Leaderboard", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                text = { Text("Leaderboard 🌟", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
             )
             Tab(
                 selected = selectedTab == 2,
                 onClick = { selectedTab = 2 },
-                text = { Text("Notifications", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                text = { Text("Alerts 🔔", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         when (selectedTab) {
-            0 -> PointsTableTab(standings = standings)
-            1 -> FanLeaderboardTab(playerStats = playerStats)
-            2 -> NotificationsManagerTab(
-                notifications = notifications,
-                notifyWickets = notifyWickets,
-                notifyBoundaries = notifyBoundaries,
-                notifyMilestones = notifyMilestones,
-                notifyDrs = notifyDrs,
-                onToggleNotification = onToggleNotification,
-                onSendTestAlert = onSendTestAlert
-            )
+            0 -> {
+                PointsTableScreen(
+                    standings = standings,
+                    isRefreshing = isRefreshingStandings,
+                    onRefresh = onRefreshStandings,
+                    tournamentTitle = "Gully Premier League 2026",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
+            }
+            1 -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    FanLeaderboardTab(playerStats = playerStats)
+                }
+            }
+            2 -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    NotificationsManagerTab(
+                        notifications = notifications,
+                        notifyWickets = notifyWickets,
+                        notifyBoundaries = notifyBoundaries,
+                        notifyMilestones = notifyMilestones,
+                        notifyDrs = notifyDrs,
+                        onToggleNotification = onToggleNotification,
+                        onSendTestAlert = onSendTestAlert
+                    )
+                }
+            }
         }
     }
 }

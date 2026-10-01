@@ -80,7 +80,10 @@ fun LiveCenterTab(
     onTriggerAppeal: (String) -> Unit = {},
     onChangeBowler: () -> Unit = {},
     onChangeBatsman: () -> Unit = {},
-    onOpenNewBatsmanDialog: () -> Unit = {}
+    onOpenNewBatsmanDialog: () -> Unit = {},
+    onSwitchBattingTeam: () -> Unit = {},
+    onStartSecondInnings: () -> Unit = {},
+    onEditVenue: (() -> Unit)? = null
 ) {
     if (match == null) {
         Box(
@@ -115,16 +118,16 @@ fun LiveCenterTab(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "Scorecard Khali Hai",
+                        text = "No Match in Progress",
                         fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Abhi koi match live nahi chal raha hai.\nOfficial Scorer naya match banayega toh live scorecard aur commentary yahan auto-update honge!",
+                        text = "Select a fixture or create a new match to track live scores and ball-by-ball commentary.",
                         fontSize = 13.sp,
                         color = TextSecondary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -139,11 +142,11 @@ fun LiveCenterTab(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(46.dp)
+                            .height(44.dp)
                     ) {
                         Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = PitchDark)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("START NEW MATCH", fontWeight = FontWeight.Black, fontSize = 13.sp)
+                        Text("Start Match", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -158,7 +161,7 @@ fun LiveCenterTab(
                     ) {
                         Icon(imageVector = Icons.Default.Chat, contentDescription = null, tint = CricketGreen)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Fan Chat & Messages 💬", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Match Chat & DMs", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -196,20 +199,7 @@ fun LiveCenterTab(
                 )
             }
 
-            // 2. Docked Sidhu Paaji AI Audio Pill (Sleek Compact Floating Bar)
-            item {
-                DockedAiCommentaryPill(
-                    isEnabled = isSidhuCommentaryEnabled,
-                    isSpeaking = isSidhuSpeaking,
-                    currentDialogue = sidhuCurrentDialogue,
-                    selectedStyle = sidhuVoiceStyle,
-                    onToggleEnabled = onToggleSidhuCommentary,
-                    onSelectStyle = onSelectSidhuStyle,
-                    onTestVoice = onTestSidhuVoice
-                )
-            }
-
-            // 3. CricHeroes Sub-Tab Switcher (Summary, Scorecard, Commentary, Radar)
+            // 2. CricHeroes Sub-Tab Switcher (Summary, Scorecard, Commentary, Radar)
             item {
                 Row(
                     modifier = Modifier
@@ -223,8 +213,8 @@ fun LiveCenterTab(
                     listOf(
                         Pair(LiveCenterSubTab.LIVE_SUMMARY, "⚡ Summary"),
                         Pair(LiveCenterSubTab.DETAILED_SCORECARD, "📊 Scorecard"),
-                        Pair(LiveCenterSubTab.COMMENTARY, "🎙️ Comm"),
-                        Pair(LiveCenterSubTab.HAWKEYE_RADAR, "🎯 Radar")
+                        Pair(LiveCenterSubTab.COMMENTARY, "🎙️ Commentary"),
+                        Pair(LiveCenterSubTab.MATCH_DETAIL, "📋 Details")
                     ).forEach { (subTab, title) ->
                         val isSelected = liveCenterSubTab == subTab
                         Box(
@@ -250,14 +240,19 @@ fun LiveCenterTab(
             // 4. Dynamic Content based on CricHeroes Sub-Tab
             when (liveCenterSubTab) {
                 LiveCenterSubTab.LIVE_SUMMARY -> {
+                    val isOfficialScorer = currentRole == DeviceRole.OFFICIAL_SCORER || currentRole.isOfficial
                     // Match Score Equation & Batsmen/Bowler Banner
                     item {
                         ScoreBanner(
                             match = activeMatch,
                             recentBalls = activeBallEvents,
                             onSwitchStriker = onSwitchStriker,
+                            isOfficialScorer = isOfficialScorer,
                             onChangeBowler = onChangeBowler,
-                            onChangeBatsman = onChangeBatsman
+                            onChangeBatsman = onChangeBatsman,
+                            onSwitchBattingTeam = onSwitchBattingTeam,
+                            onStartSecondInnings = onStartSecondInnings,
+                            onEditVenue = onEditVenue
                         )
                     }
 
@@ -269,13 +264,6 @@ fun LiveCenterTab(
                             onQuickListen = onQuickListenSummary
                         )
                     }
-
-                    // Zero-Delay Pitch Radar
-                    item {
-                        ZeroDelayLiveRadar(
-                            onTriggerDelivery = onTriggerDelivery
-                        )
-                    }
                 }
 
                 LiveCenterSubTab.DETAILED_SCORECARD -> {
@@ -285,24 +273,37 @@ fun LiveCenterTab(
                 }
 
                 LiveCenterSubTab.COMMENTARY -> {
+                    val isOfficialScorer = currentRole == DeviceRole.OFFICIAL_SCORER
                     item {
                         BallCommentaryList(
                             ballEvents = activeBallEvents,
                             selectedFilter = commentaryFilter,
                             onSelectFilter = onSelectFilter,
                             onOpenScorer = onOpenScorer,
-                            onOpenDrsReview = onOpenDrsReview
+                            onOpenDrsReview = onOpenDrsReview,
+                            isOfficialScorer = isOfficialScorer,
+                            isMatchFinished = activeMatch.status == "FINISHED"
                         )
                     }
                 }
 
-                LiveCenterSubTab.HAWKEYE_RADAR -> {
+                LiveCenterSubTab.MATCH_DETAIL -> {
                     item {
-                        ZeroDelayLiveRadar(
-                            onTriggerDelivery = onTriggerDelivery
+                        MatchDetailScreen(
+                            match = activeMatch,
+                            ballEvents = activeBallEvents,
+                            onBack = { onSelectSubTab(LiveCenterSubTab.LIVE_SUMMARY) },
+                            commentaryFilter = commentaryFilter,
+                            onSelectFilter = onSelectFilter,
+                            currentRole = currentRole,
+                            onOpenScorer = onOpenScorer,
+                            onOpenDrsReview = onOpenDrsReview,
+                            onEditVenue = onEditVenue
                         )
                     }
                 }
+
+                else -> {}
             }
 
             // Bottom spacer to ensure scrolling content clears the persistent dock
@@ -323,21 +324,34 @@ fun LiveCenterTab(
                     SpectatorContextualDock(
                         currentAngle = spectatorCamAngle,
                         onSelectAngle = onSelectSpectatorAngle,
-                        onOpenDrs = onOpenDrsReview,
                         onOpenChat = onOpenMessagesHub
                     )
                 }
 
                 DeviceRole.OFFICIAL_SCORER -> {
-                    ScorerPersistentDock(
-                        onRecordRun = onRecordRun,
-                        onRecordWicket = onOpenNewBatsmanDialog,
-                        onRecordExtra = onRecordExtra,
-                        onUndoDelivery = onUndoDelivery,
-                        onOpenFullKeypad = onOpenScorer,
-                        onChangeBowler = onChangeBowler,
-                        onChangeBatsman = onChangeBatsman
-                    )
+                    if (activeMatch.status == "FINISHED") {
+                        MatchFinishedScorerDock(
+                            statusDetail = activeMatch.statusDetail,
+                            onOpenSummary = onOpenSummaryDialog
+                        )
+                    } else if (activeMatch.status == "INNINGS_BREAK" || (activeMatch.currentInnings == 1 && activeMatch.legalBalls >= activeMatch.totalOvers * 6)) {
+                        InningsBreakScorerDock(
+                            match = activeMatch,
+                            onStartSecondInnings = onStartSecondInnings
+                        )
+                    } else {
+                        ScorerPersistentDock(
+                            onRecordRun = onRecordRun,
+                            onRecordWicket = onOpenNewBatsmanDialog,
+                            onRecordExtra = onRecordExtra,
+                            onUndoDelivery = onUndoDelivery,
+                            onOpenFullKeypad = onOpenScorer,
+                            onChangeBowler = onChangeBowler,
+                            onChangeBatsman = onChangeBatsman,
+                            onStartSecondInnings = onStartSecondInnings,
+                            isFirstInnings = activeMatch.currentInnings == 1
+                        )
+                    }
                 }
 
                 DeviceRole.BOWLER_END_UMPIRE,
@@ -494,14 +508,13 @@ private fun DockedAiCommentaryPill(
 
 /**
  * Spectator Contextual Dock:
- * Shows ONLY Watch Angles, DRS Big Screen, and Fan Chat.
- * Absolutely NO scoring keys, reset buttons, or wicket controls.
+ * Shows ONLY Watch Angles and Fan Chat.
+ * Spectators cannot call DRS reviews or score runs.
  */
 @Composable
 private fun SpectatorContextualDock(
     currentAngle: String,
     onSelectAngle: (String) -> Unit,
-    onOpenDrs: () -> Unit,
     onOpenChat: () -> Unit
 ) {
     Surface(
@@ -537,7 +550,7 @@ private fun SpectatorContextualDock(
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (isSel) CricketGreen else Color.Transparent)
                             .clickable { onSelectAngle(angleKey) }
-                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
                             text = label,
@@ -549,40 +562,16 @@ private fun SpectatorContextualDock(
                 }
             }
 
-            // DRS Big Screen Button
-            Button(
-                onClick = onOpenDrs,
-                colors = ButtonDefaults.buttonColors(containerColor = HawkEyeCyan.copy(alpha = 0.15f)),
-                border = BorderStroke(1.dp, HawkEyeCyan.copy(alpha = 0.6f)),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.height(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Policy,
-                    contentDescription = null,
-                    tint = HawkEyeCyan,
-                    modifier = Modifier.size(13.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "DRS View",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = HawkEyeCyan
-                )
-            }
-
             // Fan Chat Button
             Button(
                 onClick = onOpenChat,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE1306C).copy(alpha = 0.15f)),
                 border = BorderStroke(1.dp, Color(0xFFE1306C).copy(alpha = 0.6f)),
                 shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 modifier = Modifier.height(32.dp)
             ) {
-                Text(text = "🔥", fontSize = 11.sp)
+                Text(text = "💬", fontSize = 11.sp)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "Fan Chat",
@@ -608,7 +597,9 @@ private fun ScorerPersistentDock(
     onUndoDelivery: () -> Unit,
     onOpenFullKeypad: () -> Unit,
     onChangeBowler: () -> Unit = {},
-    onChangeBatsman: () -> Unit = {}
+    onChangeBatsman: () -> Unit = {},
+    onStartSecondInnings: () -> Unit = {},
+    isFirstInnings: Boolean = false
 ) {
     Surface(
         color = Color(0xFA1E1B0F),
@@ -641,6 +632,19 @@ private fun ScorerPersistentDock(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (isFirstInnings) {
+                        Text(
+                            text = "2nd Inn 🚀",
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFEF08A),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(StadiumGold.copy(alpha = 0.25f))
+                                .clickable { onStartSecondInnings() }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
                     Text(
                         text = "🎳 Bowler",
                         fontSize = 9.5.sp,
@@ -736,6 +740,110 @@ private fun ScoringPillButton(
     }
 }
 
+@Composable
+private fun MatchFinishedScorerDock(
+    statusDetail: String,
+    onOpenSummary: () -> Unit
+) {
+    Surface(
+        color = Color(0xFA1E293B),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.2.dp, StadiumGold),
+        tonalElevation = 12.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "🏆 MATCH FINISHED",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    color = StadiumGold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = statusDetail.ifBlank { "Match successfully completed" },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    maxLines = 1
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onOpenSummary,
+                colors = ButtonDefaults.buttonColors(containerColor = StadiumGold, contentColor = PitchDark),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "Summary 📊",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InningsBreakScorerDock(
+    match: MatchEntity,
+    onStartSecondInnings: () -> Unit
+) {
+    Surface(
+        color = Color(0xFA0F2E2A),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.2.dp, CricketGreen),
+        tonalElevation = 12.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "🏏 1ST INNINGS COMPLETED (${match.totalOvers} ov)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    color = StadiumGold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Target: ${match.target} runs for ${match.bowlingTeam}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CricketGreen,
+                    maxLines = 1
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onStartSecondInnings,
+                colors = ButtonDefaults.buttonColors(containerColor = CricketGreen, contentColor = PitchDark),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = "Start 2nd Inn 🚀",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+        }
+    }
+}
+
 /**
  * Umpire Contextual Dock:
  * Camera streaming toggle, DRS appeal triggers, and crease review.
@@ -761,71 +869,102 @@ private fun UmpireContextualDock(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Camera Stream Button
+            // DRS Review Button (Sidhu Paaji Announcement)
             Button(
-                onClick = onOpenUmpireCamera,
-                colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
+                onClick = onOpenDrsReview,
+                colors = ButtonDefaults.buttonColors(containerColor = StadiumGold),
                 shape = RoundedCornerShape(10.dp),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                 modifier = Modifier
-                    .weight(1.2f)
+                    .weight(1.3f)
                     .height(38.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.CameraAlt,
+                    imageVector = Icons.Default.Policy,
                     contentDescription = null,
                     tint = PitchDark,
                     modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "Cam View",
+                    text = "🎙️ Take DRS",
                     fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Black,
                     color = PitchDark,
                     maxLines = 1,
                     softWrap = false
                 )
             }
 
-            // LBW Appeal Trigger
-            OutlinedButton(
-                onClick = { onTriggerAppeal("LBW") },
-                border = BorderStroke(1.dp, StadiumGold),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(38.dp)
-            ) {
-                Text(
-                    text = "LBW Check",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = StadiumGold,
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
+            if (currentRole.isOfficial) {
+                // LBW Appeal Trigger (Officials Only)
+                OutlinedButton(
+                    onClick = { onTriggerAppeal("LBW") },
+                    border = BorderStroke(1.dp, StadiumGold),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                ) {
+                    Text(
+                        text = "LBW Check",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = StadiumGold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
 
-            // Edge / UltraEdge Appeal Trigger
-            OutlinedButton(
-                onClick = { onTriggerAppeal("EDGE") },
-                border = BorderStroke(1.dp, HawkEyeCyan),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(38.dp)
-            ) {
-                Text(
-                    text = "UltraEdge",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = HawkEyeCyan,
-                    maxLines = 1,
-                    softWrap = false
-                )
+                // Caught Behind Appeal Trigger (Officials Only)
+                OutlinedButton(
+                    onClick = { onTriggerAppeal("CAUGHT_BEHIND") },
+                    border = BorderStroke(1.dp, HawkEyeCyan),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(38.dp)
+                ) {
+                    Text(
+                        text = "Edge Check",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = HawkEyeCyan,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            } else {
+                // Spectator View Only Badge - Spectators can watch and chat only
+                Box(
+                    modifier = Modifier
+                        .weight(2f)
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF0F172A))
+                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.RemoveRedEye,
+                            contentDescription = null,
+                            tint = CricketGreen,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Spectator: Match Dekhein & Chat Karein",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
 
             // Full DRS Screen

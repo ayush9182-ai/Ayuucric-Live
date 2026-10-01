@@ -23,16 +23,22 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.SportsCricket
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -51,6 +57,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CricHeroesProfile
@@ -84,6 +92,10 @@ fun CricHeroesProfileDialog(
     var teamName by remember { mutableStateOf(initialProfile.teamName) }
     var city by remember { mutableStateOf(initialProfile.city) }
     var avatarEmoji by remember { mutableStateOf(initialProfile.avatarEmoji) }
+    var pin by remember { mutableStateOf(initialProfile.pin) }
+    var isPinVisible by remember { mutableStateOf(false) }
+    var showLogoutWarningDialog by remember { mutableStateOf(false) }
+    val isGuestOrUnlinked = initialProfile.mobileNumber.isBlank() || initialProfile.mobileNumber == "Unlinked" || initialProfile.isGuest
 
     val rolesList = listOf("Top-Order Batter", "Finisher", "All-Rounder", "Fast Bowler", "Spin Wizard", "Wicketkeeper")
     val avatarChoices = listOf("🏏", "⚡", "🔥", "👑", "🏆", "🧤", "🚀", "🎯", "🦁", "🦅")
@@ -145,6 +157,43 @@ fun CricHeroesProfileDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Guest Account Persistence & Progress Banner
+                if (isGuestOrUnlinked) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF241505)),
+                        border = BorderStroke(1.dp, Color(0xFFF59E0B)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Guest Account — Save Your Progress!",
+                                    color = Color(0xFFF59E0B),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                                Text(
+                                    text = "Set a 4-Digit Security PIN below to keep your match stats and career records safe when logging out.",
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = 10.5.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // World-Class Holographic Player ID Card Preview
                 Card(
                     modifier = Modifier
@@ -345,9 +394,10 @@ fun CricHeroesProfileDialog(
                     onValueChange = {
                         val clean = it.replace(" ", "_").lowercase()
                         username = clean
+                        val isSelf = clean == initialProfile.username.trim().removePrefix("@").lowercase() || clean == "ayush_7"
                         usernameError = if (clean.length < 3) {
                             "Username must be at least 3 characters"
-                        } else if (!onCheckUsernameAvailable(clean)) {
+                        } else if (!isSelf && !onCheckUsernameAvailable(clean)) {
                             "@$clean is taken by another player"
                         } else {
                             null
@@ -424,6 +474,47 @@ fun CricHeroesProfileDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = CricketGreen,
+                        unfocusedBorderColor = Color(0xFF475569),
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 4-6 Digit Security PIN (Account Recovery)
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = {
+                        if (it.length <= 6 && it.all { c -> c.isDigit() }) {
+                            pin = it
+                        }
+                    },
+                    label = { Text("Security PIN (4 to 6 Digits for Account Backup)", fontSize = 12.sp) },
+                    placeholder = { Text("Enter 4-6 digit Secret PIN", fontSize = 12.sp) },
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = StadiumGold)
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { isPinVisible = !isPinVisible }) {
+                            Icon(
+                                imageVector = if (isPinVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null,
+                                tint = TextSecondary
+                            )
+                        }
+                    },
+                    visualTransformation = if (isPinVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    supportingText = {
+                        Text(
+                            text = "Set a 4 to 6 digit secret PIN to secure your profile and restore anytime.",
+                            color = TextSecondary,
+                            fontSize = 10.sp
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = StadiumGold,
                         unfocusedBorderColor = Color(0xFF475569),
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary
@@ -549,13 +640,15 @@ fun CricHeroesProfileDialog(
                         usernameError = "Username must be at least 3 characters"
                         return@Button
                     }
-                    if (!onCheckUsernameAvailable(cleanUser)) {
+                    val isSelf = cleanUser == initialProfile.username.trim().removePrefix("@").lowercase() || cleanUser == "ayush_7"
+                    if (!isSelf && !onCheckUsernameAvailable(cleanUser)) {
                         usernameError = "@$cleanUser is already taken by another player"
                         return@Button
                     }
                     val parsedNum = jerseyNumber.toIntOrNull() ?: 7
                     val updated = initialProfile.copy(
                         username = cleanUser,
+                        pin = pin.trim(),
                         fullName = fullName.ifBlank { "Ayush Sunil" },
                         mobileNumber = mobileNumber.ifBlank { "+91 98765 43210" },
                         jerseyName = jerseyName.ifBlank { "AYUSH" },
@@ -589,8 +682,12 @@ fun CricHeroesProfileDialog(
             ) {
                 TextButton(
                     onClick = {
-                        onDismiss()
-                        onLogout()
+                        if (isGuestOrUnlinked && pin.isBlank()) {
+                            showLogoutWarningDialog = true
+                        } else {
+                            onDismiss()
+                            onLogout()
+                        }
                     }
                 ) {
                     Text(
@@ -613,4 +710,48 @@ fun CricHeroesProfileDialog(
             }
         }
     )
+
+    if (showLogoutWarningDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutWarningDialog = false },
+            containerColor = PitchDark,
+            shape = RoundedCornerShape(20.dp),
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = Color(0xFFEF4444))
+                    Text("Save Your Progress / Link Account", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(
+                    text = "Aapka profile kisi Phone ya Google account se link nahi hai, aur aapne 4-digit PIN bhi set nahi kiya hai.\n\nLogout karne par aapka purana UID aur match career history khone ka risk hai. Kya aap pehle Security PIN set karke progress save karna chahte hain?",
+                    color = Color.LightGray,
+                    fontSize = 12.5.sp,
+                    lineHeight = 17.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showLogoutWarningDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = CricketGreen)
+                ) {
+                    Text("Set PIN Now", color = PitchDark, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutWarningDialog = false
+                        onDismiss()
+                        onLogout()
+                    }
+                ) {
+                    Text("Logout Anyway", color = Color(0xFFEF4444))
+                }
+            }
+        )
+    }
 }

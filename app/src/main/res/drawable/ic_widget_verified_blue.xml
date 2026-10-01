@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp"
+    android:height="16dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Starburst badge shape -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M12,1L9.27,3.96L5.26,3.69L4.4,7.59L1,9.69L2.64,13.36L1,17.03L4.4,19.13L5.26,23.03L9.27,22.76L12,25.72L14.73,22.76L18.74,23.03L19.6,19.13L23,17.03L21.36,13.36L23,9.69L19.6,7.59L18.74,3.69L14.73,3.96L12,1Z" />
+    <!-- White checkmark -->
+    <path
+        android:fillColor="#091421"
+        android:pathData="M10,17.2L6,13.2L7.4,11.8L10,14.4L16.6,7.8L18,9.2L10,17.2Z" />
+</vector>

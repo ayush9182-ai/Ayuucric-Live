@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.SignalWifiOff
@@ -38,6 +40,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -203,13 +206,13 @@ fun AiSettingsDialog(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Column {
                                     Text(
-                                        text = "🔑 Option 2: Custom Gemini API Key",
+                                        text = "🔑 Option 2: Scorer Multi-Key Gemini Studio",
                                         color = TextPrimary,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Organizer apni personal Gemini key yahan direct paste kar sakte hain.",
+                                        text = "1 ya usse zyada keys daalein (failover ke liye). Sirf Scorer me rahegi, baki viewers ko Firebase se aawaj aayegi.",
                                         color = TextSecondary,
                                         fontSize = 11.sp
                                     )
@@ -217,8 +220,40 @@ fun AiSettingsDialog(
                             }
                         }
 
-                        // Input Box for API Key
-                        Spacer(modifier = Modifier.height(10.dp))
+                        // Parsed Keys Count Badge
+                        val parsedKeys = remember(keyInput) {
+                            com.example.data.audio.SmartGeminiCommentaryService.parseApiKeys(keyInput)
+                        }
+                        if (parsedKeys.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                color = CricketGreen.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, CricketGreen.copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = CricketGreen,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "${parsedKeys.size} Key(s) Configured — Multi-Key Auto Failover Active ⚡",
+                                        color = CricketGreen,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        // Input Box for API Key(s)
+                        Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = keyInput,
                             onValueChange = {
@@ -229,9 +264,10 @@ fun AiSettingsDialog(
                                 .fillMaxWidth()
                                 .testTag("custom_api_key_input"),
                             placeholder = {
-                                Text("Paste Gemini Key (AIzaSy...)", color = TextSecondary.copy(alpha = 0.6f), fontSize = 12.sp)
+                                Text("Paste 1 or more Gemini Keys separated by comma or new line (e.g. AIzaSy...1, AIzaSy...2)", color = TextSecondary.copy(alpha = 0.6f), fontSize = 11.sp)
                             },
-                            singleLine = true,
+                            singleLine = false,
+                            maxLines = 4,
                             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = StadiumGold,
@@ -301,7 +337,7 @@ fun AiSettingsDialog(
                                         modifier = Modifier.size(16.dp)
                                     )
                                 } else {
-                                    Text("🧪 Test Key", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("🧪 Test Keys", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -319,7 +355,42 @@ fun AiSettingsDialog(
                                     contentColor = PitchDark
                                 )
                             ) {
-                                Text("💾 Save Key", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                                Text("💾 Save Keys", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            }
+                        }
+
+                        // Google AI Cricket Studio Prompt & Purpose Display
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            color = Color(0xFF0F172A),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color(0xFF334155)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = StadiumGold,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = "📡 GOOGLE GEMINI SYSTEM CONTEXT & PROMPT",
+                                        color = StadiumGold,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text(
+                                    text = "Google Gemini ko har request par direct context jata hai: 'You are Google Gemini AI integrated into AyuuCric Live Cricket Match Studio for real-time live ball-by-ball analysis, DRS third umpire reviews, and Navjot Singh Sidhu Paaji Hindi commentary.'",
+                                    color = TextSecondary,
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
                             }
                         }
 

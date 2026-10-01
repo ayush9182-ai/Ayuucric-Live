@@ -68,7 +68,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun InstagramMatchChatDialog(
+fun LiveMatchChatDialog(
     messages: List<ChatMessage>,
     onDismiss: () -> Unit,
     onSendMessage: (String) -> Unit,
@@ -86,13 +86,11 @@ fun InstagramMatchChatDialog(
         "DRS Appeal! 🎯"
     )
 
-    val instagramGradient = Brush.linearGradient(
+    val liveChatGradient = Brush.linearGradient(
         listOf(
-            Color(0xFF833AB4),
-            Color(0xFFC13584),
-            Color(0xFFE1306C),
-            Color(0xFFFD1D1D),
-            Color(0xFFF77737)
+            Color(0xFFE11D48),
+            Color(0xFFFB923C),
+            StadiumGold
         )
     )
 
@@ -114,11 +112,11 @@ fun InstagramMatchChatDialog(
             colors = CardDefaults.cardColors(containerColor = PitchDark)
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                // Instagram-Style Gradient Header
+                // Live Match Gradient Header
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(instagramGradient)
+                        .background(liveChatGradient)
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Row(
@@ -224,7 +222,7 @@ fun InstagramMatchChatDialog(
                                                     bottomEnd = 4.dp
                                                 )
                                             )
-                                            .background(instagramGradient)
+                                            .background(liveChatGradient)
                                             .padding(horizontal = 12.dp, vertical = 8.dp)
                                     ) {
                                         Text(
@@ -402,7 +400,7 @@ fun InstagramMatchChatDialog(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(CircleShape)
-                                .background(instagramGradient)
+                                .background(liveChatGradient)
                                 .clickable {
                                     if (textInput.isNotBlank()) {
                                         onSendMessage(textInput)

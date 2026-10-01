@@ -72,7 +72,17 @@ fun InAppUpdateDialog(
     var customUrlInput by remember { mutableStateOf(updateState.customUpdateUrl) }
     var showAdvancedSettings by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    val isMandatory = updateState.isUpdateAvailable && updateState.forceUpdate
+
+    Dialog(
+        onDismissRequest = {
+            if (!isMandatory) onDismiss()
+        },
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = !isMandatory,
+            dismissOnClickOutside = !isMandatory
+        )
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -446,10 +456,21 @@ fun InAppUpdateDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                TextButton(onClick = onDismiss) {
-                    Text("Close", color = TextSecondary, fontSize = 13.sp)
+                if (!isMandatory) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TextButton(onClick = onDismiss) {
+                        Text("Close", color = TextSecondary, fontSize = 13.sp)
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "⚠️ Naya version anivarya hai. App continue karne ke liye upar 'Update Now' dabayein.",
+                        color = StadiumGold,
+                        fontSize = 11.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
                 }
             }
         }

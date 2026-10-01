@@ -26,6 +26,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -47,9 +49,11 @@ fun SidhuVoiceTuningCard(
     pitch: Float,
     speed: Float,
     gender: String,
+    autoPitch: Boolean = true,
     onPitchChange: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onGenderChange: (String) -> Unit,
+    onAutoPitchChange: (Boolean) -> Unit = {},
     onResetVoice: () -> Unit,
     onTestVoice: () -> Unit,
     modifier: Modifier = Modifier
@@ -150,6 +154,92 @@ fun SidhuVoiceTuningCard(
                     isSelected = gender == "FEMALE",
                     onClick = { onGenderChange("FEMALE") },
                     modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Auto Pitch Expression Toggle (Wicket, Hat-trick, Shouting Pitch Auto Adjust)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "⚡ Auto Pitch Expression",
+                                color = StadiumGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "Wicket, Hat-trick, Chhakke par chillakar 'ओए गुरु' बोलेगा, punchline par pitch auto kam-zyada hoga.",
+                            color = TextSecondary,
+                            fontSize = 9.sp,
+                            lineHeight = 13.sp
+                        )
+                    }
+                    Switch(
+                        checked = autoPitch,
+                        onCheckedChange = onAutoPitchChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PitchDark,
+                            checkedTrackColor = StadiumGold,
+                            uncheckedThumbColor = Color(0xFF94A3B8),
+                            uncheckedTrackColor = Color(0xFF334155)
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Auto Pitch Expression Toggle (Wicket/Hat-trick shout & punchline modulation)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF0F172A))
+                    .border(1.dp, if (autoPitch) StadiumGold.copy(alpha = 0.6f) else Color(0xFF334155), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "⚡ Auto Pitch Expression (अपने आप Pitch कम-ज्यादा)",
+                            color = if (autoPitch) StadiumGold else TextPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Wicket, Hat-trick aur Chhakke par chillakar bolega, punchline par bhaari awaaz!",
+                        color = TextSecondary,
+                        fontSize = 9.sp,
+                        lineHeight = 12.sp
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Switch(
+                    checked = autoPitch,
+                    onCheckedChange = onAutoPitchChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = PitchDark,
+                        checkedTrackColor = StadiumGold,
+                        uncheckedThumbColor = Color(0xFF94A3B8),
+                        uncheckedTrackColor = Color(0xFF334155)
+                    )
                 )
             }
 

@@ -76,20 +76,27 @@ object AiMatchSummarizer {
         if (apiKey.isBlank()) return@withContext Pair(false, "API key khali hai!")
         try {
             val jsonRequest = JSONObject().apply {
+                val systemInstruction = JSONObject().apply {
+                    val sysParts = JSONArray()
+                    sysParts.put(JSONObject().put("text", "You are Google Gemini AI integrated into AyuuCric Live Cricket Studio. The app performs live ball-by-ball cricket scoring, third umpire DRS reviews, and Hindi/English match commentary."))
+                    put("parts", sysParts)
+                }
+                put("systemInstruction", systemInstruction)
+
                 val contentsArray = JSONArray()
                 val contentObj = JSONObject()
                 val partsArray = JSONArray()
-                partsArray.put(JSONObject().put("text", "Say: Sidhu Paaji Ready!"))
+                partsArray.put(JSONObject().put("text", "Verify this Gemini API key connection for AyuuCric Live Cricket Match Studio. Confirm readiness for real-time cricket match analytics and Sidhu Paaji commentary in one short energetic line."))
                 contentObj.put("parts", partsArray)
                 contentsArray.put(contentObj)
                 put("contents", contentsArray)
             }
             val requestBody = jsonRequest.toString().toRequestBody("application/json".toMediaType())
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey.trim()}"
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}"
             val request = Request.Builder().url(url).post(requestBody).build()
             val response = okHttpClient.newCall(request).execute()
             if (response.isSuccessful) {
-                Pair(true, "Key bilkul sahi hai! Gemini 3.5 Flash connect ho gaya! ⚡")
+                Pair(true, "Key verify ho gayi! Google Gemini Live Cricket Studio connect ho gaya! ⚡")
             } else {
                 Pair(false, "Google Error: ${response.code} (Kripya key check karein)")
             }
@@ -135,6 +142,13 @@ object AiMatchSummarizer {
         """.trimIndent()
 
         val jsonRequest = JSONObject().apply {
+            val systemInstruction = JSONObject().apply {
+                val sysParts = JSONArray()
+                sysParts.put(JSONObject().put("text", "You are Google Gemini AI acting as legendary cricket commentator Navjot Singh Sidhu ('Sidhu Paaji') in AyuuCric Live Cricket Match Studio. You deliver high-voltage Hindi/Hinglish match recaps with iconic shayaris and deep tactical cricket insight."))
+                put("parts", sysParts)
+            }
+            put("systemInstruction", systemInstruction)
+
             val contentsArray = JSONArray()
             val contentObj = JSONObject()
             val partsArray = JSONArray()
@@ -150,7 +164,7 @@ object AiMatchSummarizer {
         }
 
         val requestBody = jsonRequest.toString().toRequestBody("application/json".toMediaType())
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
 
         val request = Request.Builder()
             .url(url)

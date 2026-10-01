@@ -75,8 +75,8 @@ fun CoinFlipperDialog(
         winnerTeam = null
 
         coroutineScope.launch {
-            // Cryptographically secure outcome: 0 = HEADS, 1 = TAILS
-            val outcome = if (secureRandom.nextBoolean()) "HEADS" else "TAILS"
+            // Cryptographically secure 50-50 outcome: 0.5 probability Heads, 0.5 probability Tails
+            val outcome = if (secureRandom.nextDouble() < 0.5) "HEADS" else "TAILS"
             val totalSpins = 5 + secureRandom.nextInt(4) // 5 to 8 full 360 spins
             val targetDegrees = if (outcome == "HEADS") {
                 (totalSpins * 360f)
@@ -171,7 +171,7 @@ fun CoinFlipperDialog(
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "100% Cheat-Proof Secure Random",
+                                    text = "50-50% Fair Toss (Probability 0.5 Heads | 0.5 Tails)",
                                     fontSize = 11.sp,
                                     color = CricketGreen,
                                     fontWeight = FontWeight.SemiBold
@@ -305,7 +305,29 @@ fun CoinFlipperDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // 50% - 50% Fair Coin Toss Probability Indicator
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, Color(0xFF334155))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "⚖️ Probability: 0.5 Heads (50%) • 0.5 Tails (50%)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StadiumGold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // The 3D Animated Coin Box
                 Box(

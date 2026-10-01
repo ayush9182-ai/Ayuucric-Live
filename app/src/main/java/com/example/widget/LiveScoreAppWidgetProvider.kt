@@ -29,7 +29,7 @@ class LiveScoreAppWidgetProvider : AppWidgetProvider() {
             try {
                 val db = CricketDatabase.getInstance(context)
                 val matches: List<MatchEntity> = db.cricketDao().getAllMatches().first()
-                val liveMatch = matches.find { it.status == "LIVE" } ?: matches.firstOrNull()
+                val liveMatch = matches.find { it.status == "LIVE" }
 
                 for (appWidgetId in appWidgetIds) {
                     updateAppWidget(context, appWidgetManager, appWidgetId, liveMatch)
@@ -81,44 +81,79 @@ class LiveScoreAppWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
 
             if (match != null && match.status == "LIVE") {
+                // 1. LIVE MATCH ACTIVE: IPL-STYLE FULL SCORECARD
                 views.setViewVisibility(R.id.widget_match_content, View.VISIBLE)
-                views.setViewVisibility(R.id.widget_empty_content, View.GONE)
-                views.setViewVisibility(R.id.widget_badge, View.VISIBLE)
+                views.setViewVisibility(R.id.widget_profile_content, View.GONE)
 
-                views.setTextViewText(R.id.widget_badge, "LIVE")
-                views.setTextViewText(R.id.widget_tournament, match.tournamentName.ifBlank { "Local Match" })
-                views.setTextViewText(R.id.widget_teams, "${match.teamA} vs ${match.teamB}")
+                views.setTextViewText(R.id.widget_tournament, match.tournamentName.ifBlank { "Live Match" })
+                val team1 = if (match.teamA.length <= 12) match.teamA else match.getEffectiveTeamAShort()
+                val team2 = if (match.teamB.length <= 12) match.teamB else match.getEffectiveTeamBShort()
+                views.setTextViewText(R.id.widget_teams, "$team1 vs $team2")
 
                 val oversStr = "${match.legalBalls / 6}.${match.legalBalls % 6}"
-                views.setTextViewText(R.id.widget_score, "${match.score}/${match.wickets} ($oversStr ov)")
+                views.setTextViewText(R.id.widget_score, "${match.score}/${match.wickets}")
+                views.setTextViewText(R.id.widget_overs, "($oversStr ov)")
 
-                val statusText = match.statusDetail.ifBlank {
-                    if (match.target > 0) "Target: ${match.target}" else "1st Innings in progress"
+                // Current Run Rate & Required Run Rate Calculation
+                val crr = if (match.legalBalls > 0) {
+                    val rate = (match.score.toFloat() / match.legalBalls) * 6
+                    String.format("%.2f", rate)
+                } else "0.00"
+
+                val runRateText = if (match.target > 0 && match.legalBalls < (match.totalOvers * 6)) {
+                    val remainingRuns = (match.target - match.score).coerceAtLeast(0)
+                    val remainingBalls = ((match.totalOvers * 6) - match.legalBalls).coerceAtLeast(1)
+                    val rrr = String.format("%.2f", (remainingRuns.toFloat() / remainingBalls) * 6)
+                    "CRR: $crr • RRR: $rrr"
+                } else {
+                    "CRR: $crr"
                 }
-                views.setTextViewText(R.id.widget_status, statusText)
+                views.setTextViewText(R.id.widget_run_rates, runRateText)
 
-                val strikerStr = "${match.strikerName}* ${match.strikerRuns}(${match.strikerBalls})"
-                val bowlerStr = "${match.bowlerName} ${match.bowlerWickets}/${match.bowlerRuns}"
-                views.setTextViewText(R.id.widget_players, "🏏 $strikerStr  •  🎯 $bowlerStr")
-            } else if (match != null) {
-                // Completed or scheduled match
-                views.setViewVisibility(R.id.widget_match_content, View.VISIBLE)
-                views.setViewVisibility(R.id.widget_empty_content, View.GONE)
-                views.setViewVisibility(R.id.widget_badge, View.VISIBLE)
+                // Batsmen Row (IPL Style: Striker* runs(balls) | Non-Striker runs(balls))
+                val strikerName = match.strikerName.ifBlank { "Striker" }
+                val nonStrikerName = match.nonStrikerName.ifBlank { "Non-Striker" }
+                val batsmenText = "🏏 $strikerName* ${match.strikerRuns}(${match.strikerBalls})  |  $nonStrikerName ${match.nonStrikerRuns}(${match.nonStrikerBalls})"
+                views.setTextViewText(R.id.widget_batsmen, batsmenText)
 
-                views.setTextViewText(R.id.widget_badge, match.status.take(6))
-                views.setTextViewText(R.id.widget_tournament, match.tournamentName.ifBlank { "Local Match" })
-                views.setTextViewText(R.id.widget_teams, "${match.teamA} vs ${match.teamB}")
-                val oversStr = "${match.legalBalls / 6}.${match.legalBalls % 6}"
-                views.setTextViewText(R.id.widget_score, "${match.score}/${match.wickets} ($oversStr)")
-                views.setTextViewText(R.id.widget_status, match.statusDetail)
-                views.setTextViewText(R.id.widget_players, "Match Completed • Tap to see scorecard")
+                // Bowler Row (IPL Style: Bowler name: O-M-R-W & Economy)
+                val bowlerName = match.bowlerName.ifBlank { "Bowler" }
+                val bowlerOvers = "${match.bowlerBalls / 6}.${match.bowlerBalls % 6}"
+                val bowlerEcon = if (match.bowlerBalls > 0) {
+                    String.format("%.1f", (match.bowlerRuns.toFloat() / match.bowlerBalls) * 6)
+                } else "0.0"
+                val bowlerText = "🎯 $bowlerName: $bowlerOvers-${match.bowlerMaidens}-${match.bowlerRuns}-${match.bowlerWickets} (Econ: $bowlerEcon)"
+                views.setTextViewText(R.id.widget_bowler, bowlerText)
+
             } else {
-                // No match exists currently
+                // 2. NO LIVE MATCH RUNNING: SHOW USER'S OFFICIAL AYUUCRIC PRO PASS (EXACT SPEC FROM USER SCREENSHOT)
                 views.setViewVisibility(R.id.widget_match_content, View.GONE)
-                views.setViewVisibility(R.id.widget_empty_content, View.VISIBLE)
-                views.setViewVisibility(R.id.widget_badge, View.GONE)
-                views.setTextViewText(R.id.widget_tournament, "AyuuCric Live Score")
+                views.setViewVisibility(R.id.widget_profile_content, View.VISIBLE)
+
+                // Retrieve Profile from SharedPreferences (matching CricketViewModel keys)
+                val profilePrefs = context.getSharedPreferences("ayuu_cricheroes_profile", Context.MODE_PRIVATE)
+                val rawId = profilePrefs.getString("id", "NTOOF2")?.ifBlank { "NTOOF2" } ?: "NTOOF2"
+                val username = profilePrefs.getString("username", "ayush_7")?.ifBlank { "ayush_7" } ?: "ayush_7"
+                val playerName = profilePrefs.getString("name", "Ayush Kumar")?.ifBlank { "Ayush Kumar" } ?: "Ayush Kumar"
+                val jerseyName = profilePrefs.getString("jersey_name", "Ayush")?.ifBlank { "Ayush" } ?: "Ayush"
+                val jerseyNumber = profilePrefs.getInt("jersey_num", 7).let { if (it > 0) it else 7 }
+                val avatarEmoji = profilePrefs.getString("avatar", "🦁") ?: "🦁"
+                val battingStyle = profilePrefs.getString("bat_style", "Right-hand Bat") ?: "Right-hand Bat"
+                val bowlingStyle = profilePrefs.getString("bowl_style", "Right-arm Fast") ?: "Right-arm Fast"
+                val teamName = profilePrefs.getString("team", "Local XI")?.ifBlank { "Local XI" } ?: "Local XI"
+                val city = profilePrefs.getString("city", "India")?.ifBlank { "India" } ?: "India"
+                val isVerified = profilePrefs.getBoolean("is_verified", true)
+
+                val digitalId = "ID: " + if (rawId.length >= 6) rawId.takeLast(6).uppercase() else "NTOOF2"
+                views.setTextViewText(R.id.widget_player_digital_id, digitalId)
+                views.setTextViewText(R.id.widget_player_avatar, avatarEmoji)
+                views.setTextViewText(R.id.widget_full_name, playerName)
+                views.setTextViewText(R.id.widget_jersey_num, "#$jerseyNumber")
+                views.setTextViewText(R.id.widget_username_sub, "@${username.removePrefix("@")} • $jerseyName")
+                views.setTextViewText(R.id.widget_team_city, "$teamName • $city")
+                views.setTextViewText(R.id.widget_tag_bat, battingStyle)
+                views.setTextViewText(R.id.widget_tag_bowl, bowlingStyle)
+                views.setTextViewText(R.id.widget_tag_bowl_verified, if (isVerified) "100% Verified" else "Pro Player")
             }
 
             appWidgetManager.updateAppWidget(appWidgetId, views)

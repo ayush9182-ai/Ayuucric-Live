@@ -65,7 +65,9 @@ class NetworkConnectivityObserver(context: Context) {
         awaitClose {
             try {
                 connectivityManager.unregisterNetworkCallback(callback)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.w("NetworkObserver", "Error unregistering network callback: ${e.message}", e)
+            }
         }
     }.distinctUntilChanged()
 

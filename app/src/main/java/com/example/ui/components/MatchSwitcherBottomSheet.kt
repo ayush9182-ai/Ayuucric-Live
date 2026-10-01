@@ -13,6 +13,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,14 +31,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalContext
+import com.example.data.audio.SidhuVoiceStyle
 import com.example.data.model.MatchEntity
 import com.example.ui.theme.*
 import com.example.util.ApkShareHelper
 
 /**
- * Compact Match Switcher & Unified Management Sheet.
+ * Compact Match Switcher & Unified Management Sheet (More Section).
  * Replaces the overcrowded top chip strip and provides clean access to
- * match selection, Toss, Squad, Reset, and Ground Tools.
+ * match selection, Toss, Squad, Reset, Sidhu Paaji Commentary, and Ground Tools.
  */
 @Composable
 fun MatchSwitcherBottomSheet(
@@ -49,9 +54,62 @@ fun MatchSwitcherBottomSheet(
     onOpenCreateMatch: () -> Unit,
     onOpenLogin: () -> Unit,
     onOpenAiSettings: () -> Unit,
+    isSidhuCommentaryEnabled: Boolean = true,
+    isSidhuSpeaking: Boolean = false,
+    sidhuCurrentDialogue: String = "",
+    sidhuVoiceStyle: SidhuVoiceStyle = SidhuVoiceStyle.ENERGETIC_JOSH,
+    onToggleSidhuCommentary: (Boolean) -> Unit = {},
+    onSelectSidhuStyle: (SidhuVoiceStyle) -> Unit = {},
+    onTestSidhuVoice: () -> Unit = {},
+    isMatchStartMuted: Boolean = false,
+    onToggleMatchStartMute: (() -> Unit)? = null,
+    isDmMuted: Boolean = false,
+    onToggleDmMute: (() -> Unit)? = null,
+    onDeleteMatch: ((String) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    var matchToDelete by remember { mutableStateOf<MatchEntity?>(null) }
+
+    // Confirm Delete Dialog
+    matchToDelete?.let { targetMatch ->
+        AlertDialog(
+            onDismissRequest = { matchToDelete = null },
+            containerColor = Color(0xFF0F172A),
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(imageVector = Icons.Default.DeleteOutline, contentDescription = null, tint = DrsOutRed)
+                    Text("Delete Match?", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                Text(
+                    "Kya aap '${targetMatch.teamA} vs ${targetMatch.teamB}' match ko delete karna chahte hain? Sabhi ball records permanent delete ho jayenge.",
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val id = targetMatch.id
+                        matchToDelete = null
+                        onDeleteMatch?.invoke(id)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DrsOutRed),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Haan, Delete Karein 🗑️", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { matchToDelete = null }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -162,16 +220,148 @@ fun MatchSwitcherBottomSheet(
                         }
                     )
                     QuickActionCard(
-                        icon = Icons.Default.Refresh,
-                        title = "Reset 0-0",
-                        subtitle = "New Match",
-                        tint = DrsOutRed,
+                        icon = Icons.Default.AddCircle,
+                        title = "New Match",
+                        subtitle = "Toss & Squad",
+                        tint = StadiumGold,
                         modifier = Modifier.weight(1f),
                         onClick = {
                             onDismiss()
-                            onOpenResetDialog()
+                            onOpenCreateMatch()
                         }
                     )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Notification Preferences (Match Start Alerts & DM Alerts with Mute option)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                    border = BorderStroke(0.8.dp, Color(0xFF1E293B))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(
+                                    imageVector = if (isMatchStartMuted) Icons.Default.NotificationsOff else Icons.Default.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = if (isMatchStartMuted) DrsOutRed else StadiumGold,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column {
+                                    Text("Match Start Alerts", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(if (isMatchStartMuted) "🔕 Muted" else "🔔 Active (Notifies when match starts)", color = TextSecondary, fontSize = 10.sp)
+                                }
+                            }
+                            Switch(
+                                checked = !isMatchStartMuted,
+                                onCheckedChange = { onToggleMatchStartMute?.invoke() },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = PitchDark,
+                                    checkedTrackColor = StadiumGold
+                                )
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF1E293B), thickness = 0.5.dp)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(
+                                    imageVector = if (isDmMuted) Icons.Default.NotificationsOff else Icons.Default.ChatBubble,
+                                    contentDescription = null,
+                                    tint = if (isDmMuted) DrsOutRed else CricketGreen,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column {
+                                    Text("DM Message Alerts", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(if (isDmMuted) "🔕 Muted" else "🔔 Active (Notifies on new messages)", color = TextSecondary, fontSize = 10.sp)
+                                }
+                            }
+                            Switch(
+                                checked = !isDmMuted,
+                                onCheckedChange = { onToggleDmMute?.invoke() },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = PitchDark,
+                                    checkedTrackColor = CricketGreen
+                                )
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF1E293B), thickness = 0.5.dp)
+
+                        // 24x7 Background Service & FCM Status
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                                Icon(
+                                    imageVector = Icons.Default.FlashOn,
+                                    contentDescription = null,
+                                    tint = HawkEyeCyan,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column {
+                                    Text("24x7 Background Delivery", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("App band hone par bhi Live Match & Messages aayenge ✅", color = HawkEyeCyan, fontSize = 10.sp)
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    com.example.notification.MatchNotificationHelper.sendTestLiveNotification(context)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = HawkEyeCyan.copy(alpha = 0.2f), contentColor = HawkEyeCyan),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text("Test 🔔", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (!com.example.notification.MatchNotificationHelper.isBatteryOptimizationIgnored(context)) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                color = StadiumGold.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, StadiumGold.copy(alpha = 0.4f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        com.example.notification.MatchNotificationHelper.requestIgnoreBatteryOptimization(context)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
+                                        Text("⚡", fontSize = 12.sp)
+                                        Text(
+                                            text = "MIUI / Vivo / Samsung Battery Saver band karein taaki app band hone par alert na ruke.",
+                                            fontSize = 9.5.sp,
+                                            color = StadiumGold,
+                                            lineHeight = 13.sp
+                                        )
+                                    }
+                                    Text("ALLOW ➔", fontSize = 10.sp, fontWeight = FontWeight.Black, color = StadiumGold)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -214,7 +404,20 @@ fun MatchSwitcherBottomSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Sidhu Paaji AI Live Commentary Bar inside More
+                SidhuAiCommentaryBar(
+                    isEnabled = isSidhuCommentaryEnabled,
+                    isSpeaking = isSidhuSpeaking,
+                    currentDialogue = sidhuCurrentDialogue,
+                    selectedStyle = sidhuVoiceStyle,
+                    onToggleEnabled = onToggleSidhuCommentary,
+                    onSelectStyle = onSelectSidhuStyle,
+                    onTestVoice = onTestSidhuVoice
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Section 2: Switch Match List
                 Row(
@@ -340,20 +543,39 @@ fun MatchSwitcherBottomSheet(
                                     )
                                 }
 
-                                if (isSelected) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(CricketGreen),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Selected",
-                                            tint = PitchDark,
-                                            modifier = Modifier.size(14.dp)
-                                        )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (onDeleteMatch != null) {
+                                        IconButton(
+                                            onClick = { matchToDelete = match },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = "Delete Match",
+                                                tint = Color.Red.copy(alpha = 0.6f),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (isSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(CricketGreen),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Selected",
+                                                tint = PitchDark,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -386,7 +608,7 @@ fun MatchSwitcherBottomSheet(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Login / Switch CricHeroes Account",
+                            text = "Login / Switch Player Profile",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary

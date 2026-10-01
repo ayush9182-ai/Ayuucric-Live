@@ -109,7 +109,7 @@ fun WhatsAppMatchShareDialog(
                                 color = Color.White
                             )
                             Text(
-                                text = "CricHeroes 1-Tap Status & Poster",
+                                text = "Live Match 1-Tap Status & Poster",
                                 fontSize = 11.sp,
                                 color = Color(0xFF25D366),
                                 fontWeight = FontWeight.Bold

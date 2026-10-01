@@ -45,6 +45,80 @@ data class DeliveryResult(
 object MatchScoringEngine {
 
     fun processDelivery(currentMatch: MatchEntity, input: DeliveryInput): DeliveryResult {
+        // Strict Guard 1: If match is already FINISHED, absolutely reject any new deliveries
+        if (currentMatch.status == "FINISHED") {
+            return DeliveryResult(
+                updatedMatch = currentMatch,
+                ballEvent = BallEventEntity(
+                    matchId = input.matchId,
+                    overNumber = currentMatch.legalBalls / 6,
+                    ballInOver = currentMatch.legalBalls % 6,
+                    runs = 0,
+                    batsman = currentMatch.strikerName,
+                    bowler = currentMatch.bowlerName,
+                    commentary = "Match finished (${currentMatch.statusDetail})"
+                ),
+                eventNotification = null,
+                milestoneNotification = null
+            )
+        }
+
+        // Strict Guard 2: If 2nd innings and target was already reached or all overs bowled
+        val maxTotalBalls = (currentMatch.totalOvers * 6).coerceAtLeast(6)
+        if (currentMatch.currentInnings == 2 && currentMatch.target > 0 && currentMatch.score >= currentMatch.target) {
+            val finished = currentMatch.copy(status = "FINISHED")
+            return DeliveryResult(
+                updatedMatch = finished,
+                ballEvent = BallEventEntity(
+                    matchId = input.matchId,
+                    overNumber = currentMatch.legalBalls / 6,
+                    ballInOver = currentMatch.legalBalls % 6,
+                    runs = 0,
+                    batsman = currentMatch.strikerName,
+                    bowler = currentMatch.bowlerName,
+                    commentary = "Target already achieved (${currentMatch.statusDetail})"
+                ),
+                eventNotification = null,
+                milestoneNotification = null
+            )
+        }
+        if (currentMatch.currentInnings == 2 && currentMatch.legalBalls >= maxTotalBalls) {
+            val finished = currentMatch.copy(status = "FINISHED")
+            return DeliveryResult(
+                updatedMatch = finished,
+                ballEvent = BallEventEntity(
+                    matchId = input.matchId,
+                    overNumber = currentMatch.legalBalls / 6,
+                    ballInOver = currentMatch.legalBalls % 6,
+                    runs = 0,
+                    batsman = currentMatch.strikerName,
+                    bowler = currentMatch.bowlerName,
+                    commentary = "All overs bowled (${currentMatch.statusDetail})"
+                ),
+                eventNotification = null,
+                milestoneNotification = null
+            )
+        }
+
+        // Strict Guard 3: If 1st innings completed (innings break or overs finished), reject new deliveries until 2nd innings starts
+        if (currentMatch.status == "INNINGS_BREAK" || (currentMatch.currentInnings == 1 && currentMatch.legalBalls >= maxTotalBalls)) {
+            val breakMatch = if (currentMatch.status != "INNINGS_BREAK") currentMatch.copy(status = "INNINGS_BREAK") else currentMatch
+            return DeliveryResult(
+                updatedMatch = breakMatch,
+                ballEvent = BallEventEntity(
+                    matchId = input.matchId,
+                    overNumber = currentMatch.legalBalls / 6,
+                    ballInOver = currentMatch.legalBalls % 6,
+                    runs = 0,
+                    batsman = currentMatch.strikerName,
+                    bowler = currentMatch.bowlerName,
+                    commentary = "1st Innings completed. Please start 2nd Innings."
+                ),
+                eventNotification = null,
+                milestoneNotification = null
+            )
+        }
+
         val runs = input.runs
         val isWicket = input.isWicket
         val wicketType = input.wicketType
@@ -60,7 +134,8 @@ object MatchScoringEngine {
         val totalRunToAdd = runs + penalty
         val newScore = currentMatch.score + totalRunToAdd
         val newWickets = if (isWicket) (currentMatch.wickets + 1).coerceAtMost(10) else currentMatch.wickets
-        val newLegalBalls = if (isLegal) currentMatch.legalBalls + 1 else currentMatch.legalBalls
+        // Never allow legalBalls to exceed maxTotalBalls
+        val newLegalBalls = if (isLegal) (currentMatch.legalBalls + 1).coerceAtMost(maxTotalBalls) else currentMatch.legalBalls
         val newOver = newLegalBalls / 6
         val newBallInOver = newLegalBalls % 6
 
@@ -237,31 +312,73 @@ object MatchScoringEngine {
             finalNonStrikerSixes = currentMatch.nonStrikerSixes
         }
 
-        val isFinished = currentMatch.target > 0 && (newScore >= currentMatch.target || newWickets >= 10 || remainingBalls == 0)
+        val isFirstInnings = currentMatch.currentInnings == 1
+        val currentBatSquad = (if (currentMatch.battingTeam.equals(currentMatch.teamA, ignoreCase = true)) teamAPlayers else teamBPlayers)
+            .split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        val maxAllOutWickets = if (currentBatSquad.size in 2..10) currentBatSquad.size - 1 else 10
 
-        val updatedMatch = currentMatch.copy(
-            score = newScore,
-            wickets = newWickets,
-            legalBalls = newLegalBalls,
-            status = if (isFinished) "FINISHED" else "LIVE",
-            statusDetail = statusDetail,
-            strikerName = finalStrikerName,
-            strikerRuns = finalStrikerRuns,
-            strikerBalls = finalStrikerBalls,
-            strikerFours = finalStrikerFours,
-            strikerSixes = finalStrikerSixes,
-            nonStrikerName = finalNonStrikerName,
-            nonStrikerRuns = finalNonStrikerRuns,
-            nonStrikerBalls = finalNonStrikerBalls,
-            nonStrikerFours = finalNonStrikerFours,
-            nonStrikerSixes = finalNonStrikerSixes,
-            bowlerBalls = bowlerBalls,
-            bowlerRuns = bowlerRuns,
-            bowlerWickets = bowlerWickets,
-            teamAPlayers = teamAPlayers,
-            teamBPlayers = teamBPlayers,
-            dismissedBatsmenJson = newDismissedBatsmenJson
-        )
+        val isFirstInningsAllOut = isFirstInnings && newWickets >= maxAllOutWickets
+        val isFirstInningsOversComplete = isFirstInnings && isLegal && newLegalBalls >= (currentMatch.totalOvers * 6)
+        val isFirstInningsComplete = isFirstInningsAllOut || isFirstInningsOversComplete
+
+        val updatedMatch = if (isFirstInningsComplete) {
+            val firstInningsScoreStr = "$newScore/$newWickets (${newLegalBalls / 6}.${newLegalBalls % 6} ov)"
+            val targetRuns = newScore + 1
+            currentMatch.copy(
+                score = newScore,
+                wickets = newWickets,
+                legalBalls = newLegalBalls,
+                target = targetRuns,
+                teamAFirstInningsScore = firstInningsScoreStr,
+                status = "INNINGS_BREAK",
+                statusDetail = "1st Innings Complete: ${currentMatch.battingTeam} scored $newScore/$newWickets (${newLegalBalls / 6}.${newLegalBalls % 6} ov). Target: $targetRuns runs.",
+                strikerName = finalStrikerName,
+                strikerRuns = finalStrikerRuns,
+                strikerBalls = finalStrikerBalls,
+                strikerFours = finalStrikerFours,
+                strikerSixes = finalStrikerSixes,
+                nonStrikerName = finalNonStrikerName,
+                nonStrikerRuns = finalNonStrikerRuns,
+                nonStrikerBalls = finalNonStrikerBalls,
+                nonStrikerFours = finalNonStrikerFours,
+                nonStrikerSixes = finalNonStrikerSixes,
+                bowlerBalls = bowlerBalls,
+                bowlerRuns = bowlerRuns,
+                bowlerWickets = bowlerWickets,
+                teamAPlayers = teamAPlayers,
+                teamBPlayers = teamBPlayers,
+                dismissedBatsmenJson = newDismissedBatsmenJson
+            )
+        } else {
+            val isFinished = currentMatch.currentInnings == 2 && (
+                (currentMatch.target > 0 && newScore >= currentMatch.target) ||
+                newWickets >= maxAllOutWickets ||
+                (isLegal && newLegalBalls >= maxTotalBalls)
+            )
+            currentMatch.copy(
+                score = newScore,
+                wickets = newWickets,
+                legalBalls = newLegalBalls,
+                status = if (isFinished) "FINISHED" else "LIVE",
+                statusDetail = statusDetail,
+                strikerName = finalStrikerName,
+                strikerRuns = finalStrikerRuns,
+                strikerBalls = finalStrikerBalls,
+                strikerFours = finalStrikerFours,
+                strikerSixes = finalStrikerSixes,
+                nonStrikerName = finalNonStrikerName,
+                nonStrikerRuns = finalNonStrikerRuns,
+                nonStrikerBalls = finalNonStrikerBalls,
+                nonStrikerFours = finalNonStrikerFours,
+                nonStrikerSixes = finalNonStrikerSixes,
+                bowlerBalls = bowlerBalls,
+                bowlerRuns = bowlerRuns,
+                bowlerWickets = bowlerWickets,
+                teamAPlayers = teamAPlayers,
+                teamBPlayers = teamBPlayers,
+                dismissedBatsmenJson = newDismissedBatsmenJson
+            )
+        }
 
         val ballEvent = BallEventEntity(
             matchId = input.matchId,
@@ -282,7 +399,20 @@ object MatchScoringEngine {
 
         // Generate instant notifications
         var eventAlert: NotificationAlertEntity? = null
-        if (isWicket) {
+        if (isFirstInningsComplete) {
+            val targetRuns = newScore + 1
+            eventAlert = NotificationAlertEntity(
+                title = "🏏 1ST INNINGS COMPLETED! Target: $targetRuns",
+                message = "${currentMatch.battingTeam} scored $newScore/$newWickets. ${currentMatch.bowlingTeam} need $targetRuns runs to win. 2nd Innings has started!",
+                type = "INNINGS_BREAK"
+            )
+        } else if (updatedMatch.status == "FINISHED") {
+            eventAlert = NotificationAlertEntity(
+                title = "🏆 MATCH FINISHED!",
+                message = updatedMatch.statusDetail,
+                type = "MATCH_FINISHED"
+            )
+        } else if (isWicket) {
             eventAlert = NotificationAlertEntity(
                 title = "⚡ WICKET! $outBatterName $wicketType",
                 message = "${currentMatch.bowlerName} strikes! Score is now $newScore/$newWickets.",
@@ -341,12 +471,20 @@ object MatchScoringEngine {
         remainingBalls: Int
     ): String {
         return if (currentMatch.target > 0 && newScore >= currentMatch.target) {
-            "${currentMatch.battingTeam} won by ${10 - newWickets} wickets!"
+            "${currentMatch.battingTeam} won by ${10 - newWickets} wickets! 🏆"
         } else if (currentMatch.target > 0 && (newWickets >= 10 || remainingBalls == 0)) {
-            "${currentMatch.bowlingTeam} won by ${remainingRuns} runs!"
+            if (newScore == currentMatch.target - 1) {
+                "Match Tied! 🤝 Super Over!"
+            } else {
+                "${currentMatch.bowlingTeam} won by ${remainingRuns} runs! 🏆"
+            }
         } else if (currentMatch.target > 0) {
             val rrr = if (remainingBalls > 0) remainingRuns * 6f / remainingBalls else 0f
             "Need $remainingRuns runs in $remainingBalls balls (RRR: ${"%.2f".format(rrr)})"
+        } else if (newWickets >= 10) {
+            "1st Innings Complete (${currentMatch.battingTeam} All Out $newScore/$newWickets) • Target: ${newScore + 1}"
+        } else if (remainingBalls == 0) {
+            "1st Innings Complete (${currentMatch.totalOvers} ov) • $newScore/$newWickets • Target: ${newScore + 1}"
         } else {
             "${currentMatch.battingTeam} batting • $newScore/$newWickets (${newLegalBalls / 6}.${newLegalBalls % 6} ov)"
         }

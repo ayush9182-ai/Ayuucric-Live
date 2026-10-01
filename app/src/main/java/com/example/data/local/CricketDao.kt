@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface CricketDao {
 
-    @Query("SELECT * FROM matches")
+    @Query("SELECT * FROM matches ORDER BY ROWID DESC")
     fun getAllMatches(): Flow<List<MatchEntity>>
 
     @Query("SELECT * FROM matches WHERE id = :matchId LIMIT 1")

@@ -60,6 +60,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -100,29 +101,6 @@ fun LiveMatchBroadcastPlayer(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Blinking Live Badge Animation
-    val infiniteTransition = rememberInfiniteTransition(label = "livePulse")
-    val liveAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "liveAlpha"
-    )
-
-    // Ball Pitch Animation Phase for Visualizer
-    val pitchBallProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "pitchProgress"
-    )
-
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -142,30 +120,7 @@ fun LiveMatchBroadcastPlayer(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Pulsing Red Live Badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(DrsOutRed.copy(alpha = liveAlpha))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "LIVE VIDEO",
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-
+                    BroadcastLiveBadge()
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
@@ -249,7 +204,9 @@ fun LiveMatchBroadcastPlayer(
                                             CameraSelector.DEFAULT_BACK_CAMERA,
                                             preview
                                         )
-                                    } catch (_: Exception) {}
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("LiveMatchBroadcast", "Camera binding failure: ${e.message}", e)
+                                    }
                                 }, ContextCompat.getMainExecutor(ctx))
 
                                 previewView
@@ -260,7 +217,6 @@ fun LiveMatchBroadcastPlayer(
                         // Ground Match Pitch Visualizer Stream (Spectator / Home Parents View)
                         GroundMatchPitchSimulation(
                             camAngle = spectatorCamAngle,
-                            ballProgress = pitchBallProgress,
                             striker = match.strikerName,
                             bowler = match.bowlerName
                         )
@@ -341,8 +297,9 @@ fun LiveMatchBroadcastPlayer(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
+                                    val battingShortCode = if (match.battingTeam.equals(match.teamA, ignoreCase = true)) match.getEffectiveTeamAShort() else match.getEffectiveTeamBShort()
                                     Text(
-                                        text = match.teamBShort,
+                                        text = battingShortCode,
                                         color = Color.White,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Black,
@@ -440,13 +397,60 @@ fun LiveMatchBroadcastPlayer(
 }
 
 @Composable
+private fun BroadcastLiveBadge(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "live_pulse")
+    val liveAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "liveAlpha"
+    )
+    Box(
+        modifier = modifier
+            .graphicsLayer { alpha = liveAlpha }
+            .clip(RoundedCornerShape(4.dp))
+            .background(DrsOutRed)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "LIVE VIDEO",
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black
+            )
+        }
+    }
+}
+
+@Composable
 private fun GroundMatchPitchSimulation(
     camAngle: String,
-    ballProgress: Float,
     striker: String,
-    bowler: String
+    bowler: String,
+    modifier: Modifier = Modifier
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pitch_sim_ball")
+    val ballProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pitchBallProgress"
+    )
+    Box(modifier = modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height

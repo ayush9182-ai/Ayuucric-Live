@@ -148,13 +148,20 @@ fun TopBroadcastHeader(
                                 color = TextPrimary
                             )
                             if (unreadMessagesCount > 0) {
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Box(
                                     modifier = Modifier
-                                        .size(6.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFFE1306C))
-                                )
+                                        .background(Color(0xFFEF4444))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = if (unreadMessagesCount > 99) "99+" else "$unreadMessagesCount",
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
                             }
                         }
                     }
@@ -245,9 +252,11 @@ fun TopBroadcastHeader(
 
                         val fixtureText = if (match != null) {
                             val scoreStr = "${match.score}/${match.wickets} (${match.legalBalls / 6}.${match.legalBalls % 6} ov)"
-                            "${match.teamAShort} vs ${match.teamBShort} • ${match.status} • $scoreStr"
+                            val tA = match.getEffectiveTeamAShort()
+                            val tB = match.getEffectiveTeamBShort()
+                            "$tA vs $tB • ${match.status} • $scoreStr"
                         } else {
-                            "No Match Live • Tap to Select / Create 🏏"
+                            "No Match Live • Select Fixture"
                         }
 
                         Text(
@@ -264,6 +273,30 @@ fun TopBroadcastHeader(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // Quick Live Notification Bell
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(StadiumGold.copy(alpha = 0.25f))
+                                .border(1.dp, StadiumGold, CircleShape)
+                                .clickable {
+                                    if (match != null && match.status == "LIVE") {
+                                        com.example.notification.MatchNotificationHelper.notifyMatchLive(context, match, forceNotify = true)
+                                    } else {
+                                        com.example.notification.MatchNotificationHelper.sendTestLiveNotification(context)
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = "Live Notification Alert",
+                                tint = StadiumGold,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
                         // Quick 1-Tap Share APK Button (Direct APK Share without USB)
                         Box(
                             modifier = Modifier

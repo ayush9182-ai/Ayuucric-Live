@@ -5,80 +5,72 @@
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="10dp">
 
-    <!-- Top Header Bar -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="AYUUCRIC"
-            android:textColor="#22C55E"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/widget_badge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/widget_live_badge"
-            android:paddingStart="5dp"
-            android:paddingTop="2dp"
-            android:paddingEnd="5dp"
-            android:paddingBottom="2dp"
-            android:text="LIVE"
-            android:textColor="#FFFFFF"
-            android:textSize="9sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/widget_tournament"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="Local Tournament"
-            android:textColor="#94A3B8"
-            android:textSize="11sp" />
-
-        <TextView
-            android:id="@+id/widget_refresh_time"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="● SYNC"
-            android:textColor="#06B6D4"
-            android:textSize="9sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="0.8dp"
-        android:layout_marginTop="6dp"
-        android:layout_marginBottom="6dp"
-        android:background="#1E293B" />
-
-    <!-- LIVE MATCH CONTENT CONTAINER -->
+    <!-- 1. LIVE MATCH SCORECARD (SHOWN ONLY WHEN A LIVE MATCH IS ACTIVE) -->
     <LinearLayout
         android:id="@+id/widget_match_content"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:visibility="visible">
+        android:visibility="gone">
 
-        <!-- Teams and Current Score -->
+        <!-- Header -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AYUUCRIC"
+                android:textColor="#22C55E"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/widget_live_badge"
+                android:paddingStart="4dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="4dp"
+                android:paddingBottom="1dp"
+                android:text="● LIVE"
+                android:textColor="#FFFFFF"
+                android:textSize="8sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_tournament"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Match Center"
+                android:textColor="#94A3B8"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/widget_run_rates"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CRR: 0.0"
+                android:textColor="#EAB308"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Scores & Teams -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -89,72 +81,270 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="Team 1 vs Team 2"
+                android:text="IND vs PAK"
                 android:textColor="#F8FAFC"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/widget_score"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="0/0 (0.0)"
+                android:layout_marginStart="4dp"
+                android:text="0/0"
                 android:textColor="#22C55E"
-                android:textSize="16sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_overs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="3dp"
+                android:text="(0.0)"
+                android:textColor="#94A3B8"
+                android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- Status Detail / Target -->
         <TextView
-            android:id="@+id/widget_status"
+            android:id="@+id/widget_batsmen"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="Ready for 1st ball"
-            android:textColor="#F59E0B"
-            android:textSize="11sp" />
+            android:text="🏏 Striker* 0(0) | Non-Striker 0(0)"
+            android:textColor="#E2E8F0"
+            android:textSize="10.5sp" />
 
-        <!-- Striker and Bowler Line -->
         <TextView
-            android:id="@+id/widget_players"
+            android:id="@+id/widget_bowler"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="🏏 Striker • 🎯 Bowler"
-            android:textColor="#CBD5E1"
-            android:textSize="10.5sp" />
+            android:text="🎯 Bowler: 0.0-0-0-0"
+            android:textColor="#38BDF8"
+            android:textSize="10sp" />
     </LinearLayout>
 
-    <!-- EMPTY CONTENT (When no match is live) -->
+    <!-- 2. AYUUCRIC PRO PASS (SHOWN WHEN NO MATCH IS LIVE - EXACTLY AS IN USER SCREENSHOT) -->
     <LinearLayout
-        android:id="@+id/widget_empty_content"
+        android:id="@+id/widget_profile_content"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:visibility="gone">
+        android:visibility="visible">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <!-- Top Row: Circular App Icon + AYUUCRIC + Blue Verified Checkmark + Subtitle -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🏏 Koi Match Live Nahi Hai"
-            android:textColor="#F8FAFC"
-            android:textSize="13sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="wrap_content"
+            <!-- Red-Orange Circular App Logo -->
+            <ImageView
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:contentDescription="App Logo"
+                android:src="@drawable/ic_widget_app_circle" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="AYUUCRIC"
+                        android:textColor="#FFA000"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:layout_width="15dp"
+                        android:layout_height="15dp"
+                        android:layout_marginStart="5dp"
+                        android:contentDescription="Verified"
+                        android:src="@drawable/ic_widget_verified_blue" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Official Player Profile &amp; Digital ID"
+                    android:textColor="#94A3B8"
+                    android:textSize="10sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Pro Pass Card Container (Deep Emerald Teal Card with Gold Border) -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="Match shuru hote hi score yahan auto-sync hoga"
-            android:textColor="#94A3B8"
-            android:textSize="10sp" />
+            android:layout_marginTop="8dp"
+            android:background="@drawable/widget_pro_pass_bg"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <!-- Card Header: AYUUCRIC PRO PASS + ID -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="AYUUCRIC PRO PASS"
+                    android:textColor="#EAB308"
+                    android:textSize="10.5sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_player_digital_id"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ID: NTOOF2"
+                    android:textColor="#38BDF8"
+                    android:textSize="10.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Card Middle: Avatar Circle + Name & Details -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <!-- Avatar Circle with Gold Stroke -->
+                <TextView
+                    android:id="@+id/widget_player_avatar"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="@drawable/widget_avatar_circle"
+                    android:gravity="center"
+                    android:text="🦁"
+                    android:textSize="24sp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <!-- Name + Jersey Number in Green -->
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/widget_full_name"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Ayush Kumar"
+                            android:textColor="#FFFFFF"
+                            android:textSize="14.5sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/widget_jersey_num"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="5dp"
+                            android:text="#7"
+                            android:textColor="#22C55E"
+                            android:textSize="14.5sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- Username line in Gold -->
+                    <TextView
+                        android:id="@+id/widget_username_sub"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="@ayush_7 • Ayush"
+                        android:textColor="#EAB308"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+
+                    <!-- Team & City in Slate -->
+                    <TextView
+                        android:id="@+id/widget_team_city"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="Local XI • India"
+                        android:textColor="#94A3B8"
+                        android:textSize="10sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Card Bottom: 3 Rounded Tags (Batting, Bowling, Verified) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_tag_bat"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/widget_tag_bg"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="3dp"
+                    android:text="Right-hand Bat"
+                    android:textColor="#38BDF8"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_tag_bowl"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:background="@drawable/widget_tag_bg"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="3dp"
+                    android:text="Right-arm Fast"
+                    android:textColor="#22C55E"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_tag_bowl_verified"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:background="@drawable/widget_tag_bg"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="3dp"
+                    android:text="100% Verified"
+                    android:textColor="#EAB308"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
 </LinearLayout>

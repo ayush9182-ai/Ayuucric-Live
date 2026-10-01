@@ -16,6 +16,19 @@ object SidhuCommentaryGenerator {
     private val recentPhrases = LinkedList<String>()
     private const val MAX_HISTORY = 18
 
+    private val screamingOpeners = listOf(
+        "ओए गुरुउउउ!",
+        "अरे बाप रे बाप!",
+        "गया गया गया! डंडा उखड़ गया गुरु!",
+        "चक दे फट्टे, नप दे किल्ली!",
+        "खटाक! धमाका हो गया गुरु!",
+        "ओए होए होए! क्या देखा!",
+        "हैट्रिक! हैट्रिक! हैट्रिक!",
+        "शेर की दहाड़! ठोको ताली गुरु!",
+        "मायानगरी में भूचाल आ गया गुरु!",
+        "ओए गुरु! सांसें रोक लो!"
+    )
+
     private val openers = listOf(
         "Oye guru khataak!",
         "Thoko taali guru!",
@@ -147,7 +160,24 @@ object SidhuCommentaryGenerator {
         "Chidiya pankh failaye toh aasmaan chhota lagta hai, aur ye ballebaaz bat ghumaye toh ground chhota padta hai!",
         "Khatron se khelna sher ka kaam hai, aur aisi ball par chhakka maarna is ballebaaz ka kaam hai!",
         "Dariya ki leharon se darr kar nauka paar nahi hoti, himmat karne walon ki haar nahi hoti!",
-        "Baag mein phool khilte hain bahar aane se, aur maidan mein shor machata hai ballebaaz ke chhakke lagane se!"
+        "Baag mein phool khilte hain bahar aane se, aur maidan mein shor machata hai ballebaaz ke chhakke lagane se!",
+        "Waqt aane pe bata denge tujhe aye aasmaan, hum abhi se kya batayein kya hamare dil mein hai! Thoko taali!",
+        "Jab hausla bana liya unchi udaan ka, fir dekhna fizool hai kad aasmaan ka! Kamaal ka shot guru!",
+        "Aandhi roke toh hum toofan, dariya roke toh hum chattan! Kya josh aur kya tevar!",
+        "Haath kangan ko aarsi kya, aur padhe likhe ko faarsi kya! Gend seema paar, thoko taali!",
+        "Zindagi mein risk nahi toh ishq nahi guru! Ballebaaz ne risk liya aur boundary paar bhej diya!",
+        "Khoda pahad nikli chuhiya, bowler ka munh ban gaya pudia! Clean bowled guru!",
+        "Jiska kaam usi ko saaje, ballebaaz ke bat se chaaron taraf baaje hi baaje!",
+        "Paani mein aag laga di guru! Gend ko bheja seedhe darshak deergah mein!",
+        "Sher ki maand mein ghus kar shikaar kiya hai guru! Aisa shot mara ki sab dekhte reh gaye!",
+        "Guru khataak! Na no-ball na wide, seedhi gend aur bails ud gayi outside!",
+        "Jo bhara nahi hai bhavon se behti jisme rasdhar nahi, wo hriday nahi wo pathar hai jise is chhakke se pyar nahi!",
+        "Hawaon ke bharose mat udd, chattanein toofanon ka rukh mod deti hain! Aur ye shot match ka rukh mod deta hai!",
+        "Manzil unhi ko milti hai jinke sapno mein jaan hoti hai, pankhon se kuch nahi hota hauslon se udaan hoti hai!",
+        "Suraj dhalne se pehle jo baazi palat de wahi sikandar! Thoko taali guru!",
+        "Chamak chaand se hoti hai sitaron se nahi, aur jeet unhi ki hoti hai jo thakte haarne se nahi!",
+        "Na talwar ki dhaar se na goliyon ki bauchaar se, bowler ghayal ho gaya is karare shot ke prahaar se!",
+        "Dillagi dilon ka khel hai, aur cricket chaunkon chhakon ka mela hai guru! Thoko taali!"
     )
 
     // Helper to pick a phrase that wasn't used recently
@@ -176,7 +206,7 @@ object SidhuCommentaryGenerator {
 
         val styleBonus = when (style) {
             SidhuVoiceStyle.SHAYARI_PUNCH -> "${pickFresh(shayaris)} "
-            SidhuVoiceStyle.ENERGETIC_JOSH -> ""
+            SidhuVoiceStyle.ENERGETIC_JOSH -> if (ball.runs >= 4 || ball.isWicket || (ball.runs == 0 && Math.random() < 0.2)) "${pickFresh(shayaris)} " else ""
             SidhuVoiceStyle.TV_BROADCAST -> "AyuuCric Live exclusive, "
         }
 
@@ -264,6 +294,72 @@ object SidhuCommentaryGenerator {
             else -> {
                 val metaphor = pickFresh(dotsMetaphors)
                 "$bowler ki kassi hui delivery! $metaphor Score $scoreVoice par kayam."
+            }
+        }
+    }
+
+    fun generateHatTrickCommentary(
+        bowlerName: String,
+        strikerName: String,
+        wicketType: String,
+        currentScore: String,
+        style: SidhuVoiceStyle = SidhuVoiceStyle.ENERGETIC_JOSH
+    ): String {
+        val shout = pickFresh(screamingOpeners)
+        val closer = pickFresh(closers)
+        val hatTrickLines = listOf(
+            "$shout हैट्रिक! हैट्रिक! हैट्रिक! गेंदबाज $bowlerName ने लगातार तीन गेंदों पर तीन विकेट लेकर इतिहास रच दिया! $strikerName $wicketType होकर पवेलियन लौटते हुए! डंडियों का कबाड़खाना बना दिया गुरु! $closer",
+            "$shout अरे बाप रे बाप! क्या देख लिया मैंने! $bowlerName की हैट्रिक! लगातार तीन विकेट! चक्रव्यूह तोड़ दिया गुरु! स्टेडियम में भूचाल आ गया! Score $currentScore! चक दे फट्टे, नप दे किल्ली!",
+            "$shout इतिहास के सुनहरे पन्नों में दर्ज हो गया ये पल! गेंदबाज $bowlerName ने ली हैट्रिक! $strikerName को हवा भी नहीं लगी! ठोको ताली गुरु, ठोको ताली!"
+        )
+        return pickFresh(hatTrickLines)
+    }
+
+    fun generateHatTrickBallChanceCommentary(
+        bowlerName: String,
+        strikerName: String,
+        currentScore: String,
+        style: SidhuVoiceStyle = SidhuVoiceStyle.ENERGETIC_JOSH
+    ): String {
+        val shout = pickFresh(screamingOpeners)
+        val lines = listOf(
+            "$shout सांसें थाम लीजिए गुरु! लगातार दो गेंदों पर दो विकेट! अब आ गई हैट्रिक गेंद! $bowlerName के सामने $strikerName! स्टेडियम में सन्नाटा और दिल की धड़कनें तेज!",
+            "$shout ओए गुरु! क्या अगली गेंद पर हैट्रिक होगी? गेंदबाज $bowlerName शेर की तरह दहाड़ रहा है! पूरा मैदान खड़ा होकर ताली बजा रहा है! ठोको ताली!"
+        )
+        return pickFresh(lines)
+    }
+
+    fun generateTurningPointCommentary(
+        turningType: String,
+        bowlerName: String,
+        strikerName: String,
+        currentScore: String,
+        detail: String = "",
+        style: SidhuVoiceStyle = SidhuVoiceStyle.ENERGETIC_JOSH
+    ): String {
+        val shout = pickFresh(screamingOpeners)
+        val closer = pickFresh(closers)
+        return when (turningType) {
+            "OVER_WICKET_STORM" -> {
+                "$shout मैच का सबसे बड़ा टर्निंग पॉइंट गुरु! एक ही ओवर में दूसरा झटका! $bowlerName ने मैच का रुख पलट कर रख दिया! $strikerName पवेलियन जाते हुए! $closer"
+            }
+            "TIGHT_CHASE" -> {
+                "$shout सांसें रोक देने वाला रोमांच! $detail! हर गेंद पर दिल की धड़कन बढ़ रही है गुरु! कौन बनेगा सिकंदर और कौन हारेगा बाज़ी! $closer"
+            }
+            "LAST_OVER" -> {
+                "$shout ओए गुरु! अंतिम ओवर का महा-मुकाबला! $detail! एक तरफ जीत, दूसरी तरफ हार, बीच में खड़ा है ये दिलेर खिलाड़ी! $closer"
+            }
+            "LAST_BALL" -> {
+                "$shout अंतिम गेंद का सांस रोक देने वाला थ्रिलर! $detail! जो डरा वो मरा, जो लड़ा वो जीता! $closer"
+            }
+            "BATSMAN_FIFTY" -> {
+                "$shout शेर की दहाड़! $strikerName ने 50 रन की तूफानी फिफ्टी जड़ दी गुरु! बल्ला उठाकर दर्शकों का अभिवादन स्वीकार करते हुए! कमाल कर दित्ता! $closer"
+            }
+            "BATSMAN_CENTURY" -> {
+                "$shout महा-शतक! 100 रन पूरे! $strikerName का ऐतिहासिक शतक! मायानगरी में आतिशबाजी हो रही है गुरु! नतमस्तक हो गया पूरा स्टेडियम! $closer"
+            }
+            else -> {
+                "$shout मैच ने पलटी मारी है गुरु! $detail! पासा पलट गया! जो टीम नीचे थी वो ऊपर आ गई! $closer"
             }
         }
     }

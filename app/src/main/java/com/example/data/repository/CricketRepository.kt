@@ -14,10 +14,15 @@ import com.example.domain.engine.DeliveryInput
 import com.example.domain.engine.MatchScoringEngine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 class CricketRepository(private val dao: CricketDao) {
 
-    val allMatches: Flow<List<MatchEntity>> = dao.getAllMatches()
+    private val locallyDeletedMatchIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    val allMatches: Flow<List<MatchEntity>> = dao.getAllMatches().map { list ->
+        list.filter { !locallyDeletedMatchIds.contains(it.id) && it.id != "match_live_1" && !it.id.startsWith("dummy") && !it.id.startsWith("sample") }
+    }
     val teamStandings: Flow<List<TeamStandingEntity>> = dao.getTeamStandings()
     val playerStats: Flow<List<PlayerStatEntity>> = dao.getPlayerStats()
     val notifications: Flow<List<NotificationAlertEntity>> = dao.getNotifications()
@@ -32,20 +37,72 @@ class CricketRepository(private val dao: CricketDao) {
     suspend fun initializeDefaultDataIfEmpty() {
         val existingMatches = dao.getAllMatches().first()
         // Clean out any pre-existing template dummy match so scorecard and live feed start clean
-        val dummyMatches = existingMatches.filter { it.id == "match_live_1" && it.teamA == "Team A" && it.legalBalls == 0 }
+        val dummyMatches = existingMatches.filter { it.id == "match_live_1" || it.id.startsWith("dummy") || it.id.startsWith("sample") }
         dummyMatches.forEach {
             dao.deleteMatch(it)
             dao.deleteBallEventsForMatch(it.id)
         }
+        // Remove dummy match from remote Firestore as well
+        try {
+            com.example.data.firebase.RealtimeMatchSyncService.deleteRemoteMatch("match_live_1")
+        } catch (_: Throwable) {}
 
         // Clean out any pre-existing dummy records so table and stats start completely clean
         dao.deleteAllStandings()
         dao.deleteAllPlayerStats()
     }
 
+    suspend fun deleteMatch(matchId: String) {
+        if (matchId.isBlank()) return
+        locallyDeletedMatchIds.add(matchId)
+        dao.deleteMatchById(matchId)
+        dao.deleteBallEventsForMatch(matchId)
+        com.example.data.firebase.RealtimeMatchSyncService.deleteRemoteMatch(matchId)
+    }
+
+    suspend fun endMatch(matchId: String, summary: String = "Match Completed") {
+        val match = dao.getMatchById(matchId).first() ?: return
+        val updated = match.copy(
+            status = "COMPLETED",
+            statusDetail = summary
+        )
+        dao.updateMatch(updated)
+        com.example.data.firebase.RealtimeMatchSyncService.publishMatch(updated)
+        com.example.data.firebase.RealtimeMatchSyncService.markMatchCompleted(matchId, summary)
+    }
+
+    suspend fun markAllOtherMatchesCompleted(exceptMatchId: String) {
+        try {
+            val all = dao.getAllMatches().first()
+            all.filter { it.id != exceptMatchId && it.status == "LIVE" }.forEach { match ->
+                val updated = match.copy(status = "COMPLETED", statusDetail = "Match Ended")
+                dao.updateMatch(updated)
+                com.example.data.firebase.RealtimeMatchSyncService.markMatchCompleted(match.id, "Match Ended")
+            }
+        } catch (_: Throwable) {}
+    }
+
+    suspend fun clearAllMatchesAndStartFresh() {
+        val all = dao.getAllMatches().first()
+        all.forEach { locallyDeletedMatchIds.add(it.id) }
+        dao.deleteAllMatches()
+        dao.deleteAllBallEvents()
+        dao.deleteAllStandings()
+        dao.deleteAllPlayerStats()
+        all.forEach {
+            com.example.data.firebase.RealtimeMatchSyncService.deleteRemoteMatch(it.id)
+        }
+    }
+
     suspend fun clearAllStandingsAndStats() {
         dao.deleteAllStandings()
         dao.deleteAllPlayerStats()
+    }
+
+    suspend fun saveTeamStandings(standings: List<TeamStandingEntity>) {
+        if (standings.isNotEmpty()) {
+            dao.insertStandings(standings)
+        }
     }
 
     suspend fun recordDelivery(
@@ -173,10 +230,14 @@ class CricketRepository(private val dao: CricketDao) {
         strikerName: String,
         nonStrikerName: String,
         bowlerName: String,
-        venue: String
+        venue: String,
+        matchDate: String = "",
+        matchTime: String = "",
+        venueAddress: String = "",
+        venueCoordinates: String = ""
     ): MatchEntity {
-        val shortA = teamA.take(3).uppercase()
-        val shortB = teamB.take(3).uppercase()
+        val shortA = com.example.data.model.generateTeamCode(teamA, "T1")
+        val shortB = com.example.data.model.generateTeamCode(teamB, "T2")
         val newMatch = MatchEntity(
             id = id,
             tournamentName = tournamentName,
@@ -212,6 +273,10 @@ class CricketRepository(private val dao: CricketDao) {
             bowlerRuns = 0,
             bowlerWickets = 0,
             venue = venue,
+            matchDate = matchDate,
+            matchTime = matchTime,
+            venueAddress = venueAddress,
+            venueCoordinates = venueCoordinates,
             teamAFirstInningsScore = "Yet to bat"
         )
         dao.insertMatch(newMatch)
@@ -453,14 +518,26 @@ class CricketRepository(private val dao: CricketDao) {
         striker: String = "Striker",
         nonStriker: String = "Non-Striker",
         bowler: String = "Bowler",
-        venue: String = "Local Ground"
+        venue: String = "Local Ground",
+        battingTeam: String = "",
+        bowlingTeam: String = "",
+        tossDetail: String = "",
+        teamAPlayers: String = "",
+        teamBPlayers: String = "",
+        matchDate: String = "",
+        matchTime: String = "",
+        venueAddress: String = "",
+        venueCoordinates: String = ""
     ): MatchEntity {
         dao.deleteAllMatches()
         dao.deleteAllBallEvents()
-        val shortA = teamA.take(3).uppercase().ifBlank { "TMA" }
-        val shortB = teamB.take(3).uppercase().ifBlank { "TMB" }
+        val shortA = com.example.data.model.generateTeamCode(teamA, "T1")
+        val shortB = com.example.data.model.generateTeamCode(teamB, "T2")
+        val resolvedBatting = battingTeam.ifBlank { teamA.ifBlank { "Team A" } }
+        val resolvedBowling = bowlingTeam.ifBlank { teamB.ifBlank { "Team B" } }
+        val freshMatchId = "match_local_${System.currentTimeMillis()}"
         val freshMatch = MatchEntity(
-            id = "match_live_1",
+            id = freshMatchId,
             tournamentName = matchName.ifBlank { "Local Cricket Match" },
             teamA = teamA.ifBlank { "Team A" },
             teamB = teamB.ifBlank { "Team B" },
@@ -469,15 +546,15 @@ class CricketRepository(private val dao: CricketDao) {
             teamAColorHex = 0xFF2563EB,
             teamBColorHex = 0xFFDC2626,
             currentInnings = 1,
-            battingTeam = teamA.ifBlank { "Team A" },
-            bowlingTeam = teamB.ifBlank { "Team B" },
+            battingTeam = resolvedBatting,
+            bowlingTeam = resolvedBowling,
             score = 0,
             wickets = 0,
             legalBalls = 0,
             totalOvers = if (overs > 0) overs else 10,
             target = 0,
             status = "LIVE",
-            statusDetail = "1st Innings • 0/0 (0.0 ov) • Ready for 1st Ball",
+            statusDetail = tossDetail.ifBlank { "$resolvedBatting batting • 0/0 (0.0 ov)" },
             strikerName = striker.ifBlank { "Striker" },
             strikerRuns = 0,
             strikerBalls = 0,
@@ -494,10 +571,138 @@ class CricketRepository(private val dao: CricketDao) {
             bowlerRuns = 0,
             bowlerWickets = 0,
             venue = venue.ifBlank { "Local Ground" },
+            matchDate = matchDate,
+            matchTime = matchTime,
+            venueAddress = venueAddress,
+            venueCoordinates = venueCoordinates,
+            teamAPlayers = teamAPlayers,
+            teamBPlayers = teamBPlayers,
             teamAFirstInningsScore = "Yet to bat"
         )
         dao.insertMatch(freshMatch)
+        markAllOtherMatchesCompleted(freshMatchId)
         return freshMatch
+    }
+
+    suspend fun updateMatchVenueAndSchedule(
+        matchId: String,
+        venue: String,
+        date: String = "",
+        time: String = "",
+        address: String = "",
+        coordinates: String = ""
+    ): MatchEntity? {
+        val match = dao.getMatchById(matchId).first() ?: return null
+        val updated = match.copy(
+            venue = venue.trim().ifBlank { match.venue },
+            matchDate = if (date.isNotBlank()) date.trim() else match.matchDate,
+            matchTime = if (time.isNotBlank()) time.trim() else match.matchTime,
+            venueAddress = if (address.isNotBlank()) address.trim() else match.venueAddress,
+            venueCoordinates = if (coordinates.isNotBlank()) coordinates.trim() else match.venueCoordinates
+        )
+        dao.updateMatch(updated)
+        return updated
+    }
+
+    suspend fun switchBattingTeamAtZero(matchId: String): MatchEntity? {
+        val match = dao.getMatchById(matchId).first() ?: return null
+        if (match.legalBalls > 0) return null
+        val oldBatting = match.battingTeam
+        val oldBowling = match.bowlingTeam
+        val newBatting = oldBowling
+        val newBowling = oldBatting
+        val newTossSummary = "🪙 $newBatting won the toss and elected to BAT first"
+        val updated = match.copy(
+            battingTeam = newBatting,
+            bowlingTeam = newBowling,
+            statusDetail = newTossSummary,
+            strikerName = match.bowlerName,
+            nonStrikerName = "Batter 2",
+            bowlerName = match.strikerName,
+            score = 0,
+            wickets = 0,
+            legalBalls = 0,
+            strikerRuns = 0,
+            strikerBalls = 0,
+            strikerFours = 0,
+            strikerSixes = 0,
+            nonStrikerRuns = 0,
+            nonStrikerBalls = 0,
+            nonStrikerFours = 0,
+            nonStrikerSixes = 0,
+            bowlerBalls = 0,
+            bowlerMaidens = 0,
+            bowlerRuns = 0,
+            bowlerWickets = 0
+        )
+        dao.updateMatch(updated)
+        return updated
+    }
+
+    suspend fun startSecondInnings(
+        matchId: String,
+        striker: String,
+        nonStriker: String,
+        bowler: String
+    ): MatchEntity? {
+        val match = dao.getMatchById(matchId).first() ?: return null
+        if (match.currentInnings >= 2) return null
+        val oldBatting = match.battingTeam
+        val oldBowling = match.bowlingTeam
+        val newBatting = oldBowling
+        val newBowling = oldBatting
+        val firstInningsScoreStr = "${match.score}/${match.wickets} (${match.legalBalls / 6}.${match.legalBalls % 6} ov)"
+        val target = match.score + 1
+        val cleanStriker = striker.trim().ifBlank { "Batter 1" }
+        val cleanNonStriker = nonStriker.trim().ifBlank { "Batter 2" }
+        val cleanBowler = bowler.trim().ifBlank { "Opening Bowler" }
+        val statusText = "Target $target • $newBatting need $target runs from ${match.totalOvers * 6} balls"
+
+        var teamAPlayers = match.teamAPlayers
+        var teamBPlayers = match.teamBPlayers
+        val isNewBattingTeamA = newBatting.equals(match.teamA, ignoreCase = true)
+        if (isNewBattingTeamA) {
+            val list = teamAPlayers.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            if (!list.any { it.equals(cleanStriker, ignoreCase = true) }) teamAPlayers = if (teamAPlayers.isBlank()) cleanStriker else "$teamAPlayers, $cleanStriker"
+            if (!list.any { it.equals(cleanNonStriker, ignoreCase = true) }) teamAPlayers = if (teamAPlayers.isBlank()) cleanNonStriker else "$teamAPlayers, $cleanNonStriker"
+        } else {
+            val list = teamBPlayers.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            if (!list.any { it.equals(cleanStriker, ignoreCase = true) }) teamBPlayers = if (teamBPlayers.isBlank()) cleanStriker else "$teamBPlayers, $cleanStriker"
+            if (!list.any { it.equals(cleanNonStriker, ignoreCase = true) }) teamBPlayers = if (teamBPlayers.isBlank()) cleanNonStriker else "$teamBPlayers, $cleanNonStriker"
+        }
+
+        val updated = match.copy(
+            currentInnings = 2,
+            target = target,
+            teamAFirstInningsScore = firstInningsScoreStr,
+            battingTeam = newBatting,
+            bowlingTeam = newBowling,
+            status = "LIVE",
+            statusDetail = statusText,
+            score = 0,
+            wickets = 0,
+            legalBalls = 0,
+            strikerName = cleanStriker,
+            strikerRuns = 0,
+            strikerBalls = 0,
+            strikerFours = 0,
+            strikerSixes = 0,
+            nonStrikerName = cleanNonStriker,
+            nonStrikerRuns = 0,
+            nonStrikerBalls = 0,
+            nonStrikerFours = 0,
+            nonStrikerSixes = 0,
+            bowlerName = cleanBowler,
+            bowlerBalls = 0,
+            bowlerMaidens = 0,
+            bowlerRuns = 0,
+            bowlerWickets = 0,
+            teamAPlayers = teamAPlayers,
+            teamBPlayers = teamBPlayers,
+            dismissedBatsmenJson = "[]"
+        )
+        dao.updateMatch(updated)
+        return updated
     }
 
     suspend fun resetCurrentMatchToZero(matchId: String) {
@@ -530,26 +735,31 @@ class CricketRepository(private val dao: CricketDao) {
     }
 
     suspend fun upsertMatchesFromFirestore(matches: List<MatchEntity>) {
-        dao.insertMatches(matches)
+        val filtered = matches.filter { !locallyDeletedMatchIds.contains(it.id) && it.id != "match_live_1" && !it.id.startsWith("dummy") && !it.id.startsWith("sample") }
+        if (filtered.isNotEmpty()) {
+            dao.insertMatches(filtered)
+        }
     }
 
     suspend fun upsertMatchFromFirestore(match: MatchEntity) {
-        dao.insertMatch(match)
+        if (!locallyDeletedMatchIds.contains(match.id) && match.id != "match_live_1") {
+            dao.insertMatch(match)
+        }
     }
 
     companion object {
         val sampleMatch = MatchEntity(
             id = "match_live_1",
             tournamentName = "Gully Premier League 2026",
-            teamA = "Team A",
-            teamB = "Team B",
-            teamAShort = "TMA",
-            teamBShort = "TMB",
+            teamA = "Strikers XI",
+            teamB = "Royals XI",
+            teamAShort = "SXI",
+            teamBShort = "RXI",
             teamAColorHex = 0xFF2563EB,
             teamBColorHex = 0xFFDC2626,
             currentInnings = 1,
-            battingTeam = "Team A",
-            bowlingTeam = "Team B",
+            battingTeam = "Strikers XI",
+            bowlingTeam = "Royals XI",
             score = 0,
             wickets = 0,
             legalBalls = 0,

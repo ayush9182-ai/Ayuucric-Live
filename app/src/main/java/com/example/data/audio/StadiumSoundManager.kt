@@ -67,7 +67,7 @@ object StadiumSoundManager {
         }
     }
 
-    private fun playWhistleSound() {
+    private suspend fun playWhistleSound() {
         val sampleRate = 44100
         val durationMs = 320
         val numSamples = (sampleRate * durationMs) / 1000
@@ -91,7 +91,7 @@ object StadiumSoundManager {
         playPcmBuffer(buffer, sampleRate)
     }
 
-    private fun playToneSequence(frequencies: FloatArray, durationsMs: IntArray, volume: Float) {
+    private suspend fun playToneSequence(frequencies: FloatArray, durationsMs: IntArray, volume: Float) {
         val sampleRate = 44100
         val totalMs = durationsMs.sum()
         val totalSamples = (sampleRate * totalMs) / 1000
@@ -122,7 +122,7 @@ object StadiumSoundManager {
         playPcmBuffer(buffer, sampleRate)
     }
 
-    private fun playPcmBuffer(buffer: ShortArray, sampleRate: Int) {
+    private suspend fun playPcmBuffer(buffer: ShortArray, sampleRate: Int) {
         var track: AudioTrack? = null
         try {
             val bufferSize = buffer.size * 2
@@ -146,13 +146,17 @@ object StadiumSoundManager {
 
             track.write(buffer, 0, buffer.size)
             track.play()
-            Thread.sleep((buffer.size * 1000L) / sampleRate + 50)
-        } catch (_: Exception) {
+            val durationMs = (buffer.size * 1000L) / sampleRate + 50
+            kotlinx.coroutines.delay(durationMs)
+        } catch (e: Exception) {
+            android.util.Log.w("StadiumSoundManager", "Error generating audio tone: ${e.message}", e)
         } finally {
             try {
                 track?.stop()
                 track?.release()
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.w("StadiumSoundManager", "Error releasing AudioTrack: ${e.message}", e)
+            }
         }
     }
 }

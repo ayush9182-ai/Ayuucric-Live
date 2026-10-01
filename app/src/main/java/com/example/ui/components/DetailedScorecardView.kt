@@ -42,6 +42,38 @@ fun DetailedScorecardView(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // Target & 1st Innings Score Header in 2nd Innings
+        if (match.currentInnings == 2 && match.target > 0) {
+            val firstBatTeam = if (match.battingTeam.equals(match.teamA, ignoreCase = true)) match.teamB else match.teamA
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF0F172A))
+                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "1st Innings: $firstBatTeam ${match.teamAFirstInningsScore}",
+                        color = TextSecondary,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Target: ${match.target}",
+                        color = StadiumGold,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        }
+
         // 1. Batting Scorecard Table
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -55,8 +87,9 @@ fun DetailedScorecardView(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val currentBatTeam = match.battingTeam.ifBlank { if (match.currentInnings == 1) match.teamA else match.teamB }
                     Text(
-                        text = "🏏 ${match.teamB} Batting",
+                        text = "🏏 $currentBatTeam Batting",
                         color = StadiumGold,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
@@ -200,8 +233,9 @@ fun DetailedScorecardView(
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
+                val currentBowlTeam = match.bowlingTeam.ifBlank { if (match.currentInnings == 1) match.teamB else match.teamA }
                 Text(
-                    text = "🎯 ${match.teamA} Bowling",
+                    text = "🎯 $currentBowlTeam Bowling",
                     color = HawkEyeCyan,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold

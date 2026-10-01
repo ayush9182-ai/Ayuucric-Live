@@ -24,6 +24,7 @@ enum class AiEngineMode(val title: String, val description: String) {
 
 class AiSettingsManager(context: Context) {
 
+    private val appContext = context.applicationContext
     private val prefs: SharedPreferences = context.getSharedPreferences("ayuu_cric_ai_prefs", Context.MODE_PRIVATE)
 
     private val _customApiKey = MutableStateFlow(prefs.getString(KEY_CUSTOM_API_KEY, "") ?: "")
@@ -42,6 +43,9 @@ class AiSettingsManager(context: Context) {
         val trimmed = key.trim()
         prefs.edit().putString(KEY_CUSTOM_API_KEY, trimmed).apply()
         _customApiKey.value = trimmed
+        try {
+            com.example.data.audio.SmartGeminiCommentaryService.setCustomApiKey(appContext, trimmed)
+        } catch (_: Throwable) {}
         if (trimmed.isNotBlank()) {
             setAiMode(AiEngineMode.CUSTOM_KEY)
         }
@@ -50,7 +54,14 @@ class AiSettingsManager(context: Context) {
     fun clearCustomApiKey() {
         prefs.edit().remove(KEY_CUSTOM_API_KEY).apply()
         _customApiKey.value = ""
+        try {
+            com.example.data.audio.SmartGeminiCommentaryService.setCustomApiKey(appContext, "")
+        } catch (_: Throwable) {}
         setAiMode(AiEngineMode.AUTO_HYBRID)
+    }
+
+    fun getCustomKeyList(): List<String> {
+        return com.example.data.audio.SmartGeminiCommentaryService.parseApiKeys(_customApiKey.value)
     }
 
     fun setAiMode(mode: AiEngineMode) {

@@ -22,8 +22,8 @@ import java.net.URL
 data class AppUpdateState(
     val isChecking: Boolean = false,
     val isUpdateAvailable: Boolean = false,
-    val latestVersionName: String = "2.0.0",
-    val latestVersionCode: Int = 2,
+    val latestVersionName: String = "2.1.0",
+    val latestVersionCode: Int = 4,
     val currentVersionName: String = BuildConfig.VERSION_NAME,
     val currentVersionCode: Int = BuildConfig.VERSION_CODE,
     val releaseTitle: String = "Gully Cricket Umpire v2.0.0",
@@ -38,7 +38,8 @@ data class AppUpdateState(
     val isDownloading: Boolean = false,
     val downloadedApkPath: String? = null,
     val errorMessage: String? = null,
-    val customUpdateUrl: String = ""
+    val customUpdateUrl: String = "",
+    val forceUpdate: Boolean = false
 )
 
 class AppUpdateManager(private val context: Context) {
@@ -53,6 +54,41 @@ class AppUpdateManager(private val context: Context) {
         )
 
         try {
+            // 1. First, check Firebase Firestore for real-time remote update config (100% Free & Zero-Config)
+            try {
+                val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val snapshot = com.google.android.gms.tasks.Tasks.await(
+                    firestore.collection("app_config").document("update").get()
+                )
+                if (snapshot != null && snapshot.exists()) {
+                    val newCode = (snapshot.get("versionCode") as? Number)?.toInt() ?: BuildConfig.VERSION_CODE
+                    val newName = snapshot.getString("versionName") ?: BuildConfig.VERSION_NAME
+                    val title = snapshot.getString("title") ?: "AyuuCric Live New Update"
+                    val dUrl = snapshot.getString("downloadUrl").orEmpty()
+                    @Suppress("UNCHECKED_CAST")
+                    val notes = (snapshot.get("changelog") as? List<String>) ?: listOf(
+                        "Latest cricket scoring engine improvements",
+                        "Bug fixes and enhanced live sync"
+                    )
+                    val isForced = snapshot.getBoolean("forceUpdate") ?: true
+                    val hasUpdate = newCode > BuildConfig.VERSION_CODE
+                    if (hasUpdate && dUrl.isNotBlank()) {
+                        _updateState.value = _updateState.value.copy(
+                            isChecking = false,
+                            isUpdateAvailable = true,
+                            latestVersionCode = newCode,
+                            latestVersionName = newName,
+                            releaseTitle = title,
+                            downloadUrl = dUrl,
+                            changelog = notes,
+                            forceUpdate = isForced,
+                            errorMessage = null
+                        )
+                        return@withContext
+                    }
+                }
+            } catch (_: Throwable) {}
+
             val urlToFetch = customUrl?.takeIf { it.isNotBlank() }
                 ?: _updateState.value.customUpdateUrl.takeIf { it.isNotBlank() }
 
@@ -139,10 +175,13 @@ class AppUpdateManager(private val context: Context) {
 
             val fileLength = connection.contentLength
             val cacheDir = File(context.cacheDir, "updates")
-            if (!cacheDir.exists()) cacheDir.mkdirs()
+            if (cacheDir.exists()) {
+                cacheDir.listFiles()?.forEach { it.delete() }
+            } else {
+                cacheDir.mkdirs()
+            }
 
-            val apkFile = File(cacheDir, "gully_cricket_update.apk")
-            if (apkFile.exists()) apkFile.delete()
+            val apkFile = File(cacheDir, "AyuuCric_update_${System.currentTimeMillis()}.apk")
 
             val input: InputStream = connection.inputStream
             val output = FileOutputStream(apkFile)
@@ -170,6 +209,11 @@ class AppUpdateManager(private val context: Context) {
                 downloadedApkPath = apkFile.absolutePath,
                 errorMessage = null
             )
+
+            // Automatically launch system package installer right away
+            withContext(Dispatchers.Main) {
+                installDownloadedApk(apkFile.absolutePath)
+            }
         } catch (e: Exception) {
             _updateState.value = _updateState.value.copy(
                 isDownloading = false,
@@ -224,37 +268,7 @@ class AppUpdateManager(private val context: Context) {
      */
     fun shareInstalledApkDirectly() {
         try {
-            val appInfo = context.applicationInfo
-            val sourceApk = File(appInfo.sourceDir)
-
-            val cacheDir = File(context.cacheDir, "shared_apk")
-            if (!cacheDir.exists()) cacheDir.mkdirs()
-
-            val shareableApk = File(cacheDir, "AyuuCric_Live_v${BuildConfig.VERSION_NAME}.apk")
-            sourceApk.copyTo(shareableApk, overwrite = true)
-
-            val apkUri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.provider",
-                shareableApk
-            )
-
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/vnd.android.package-archive"
-                putExtra(Intent.EXTRA_STREAM, apkUri)
-                putExtra(Intent.EXTRA_SUBJECT, "AyuuCric Live Cricket Umpire App")
-                putExtra(
-                    Intent.EXTRA_TEXT,
-                    "Install AyuuCric Live Cricket App (v${BuildConfig.VERSION_NAME}) to connect as Bowler Cam, Crease Cam, Scorer, or Third Umpire!"
-                )
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            val chooser = Intent.createChooser(shareIntent, "Share App with Team / Phones").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(chooser)
+            com.example.util.ApkShareHelper.shareInstalledApk(context)
         } catch (e: Exception) {
             _updateState.value = _updateState.value.copy(
                 errorMessage = "Share failed: ${e.localizedMessage}"

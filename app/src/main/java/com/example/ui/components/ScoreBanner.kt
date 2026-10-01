@@ -24,8 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.SportsCricket
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -40,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,23 +65,16 @@ fun ScoreBanner(
     match: MatchEntity,
     recentBalls: List<BallEventEntity>,
     onSwitchStriker: () -> Unit,
+    isOfficialScorer: Boolean = false,
     onOpenSquad: (() -> Unit)? = null,
     onOpenUpdateApp: (() -> Unit)? = null,
     onChangeBowler: (() -> Unit)? = null,
     onChangeBatsman: (() -> Unit)? = null,
+    onSwitchBattingTeam: (() -> Unit)? = null,
+    onStartSecondInnings: (() -> Unit)? = null,
+    onEditVenue: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
-
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -152,12 +148,7 @@ fun ScoreBanner(
                             .border(0.8.dp, DrsOutRed.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(DrsOutRed.copy(alpha = pulseAlpha))
-                        )
+                        ScoreBannerPulsingDot()
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = "LIVE",
@@ -170,6 +161,49 @@ fun ScoreBanner(
             }
 
             Spacer(modifier = Modifier.height(10.dp))
+
+            // Prominent Batting vs Bowling Indicator Header (Never confuses user)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF0F172A))
+                    .border(0.8.dp, Color(0xFF1E293B), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "🏏 BATTING: ",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        color = StadiumGold
+                    )
+                    Text(
+                        text = match.battingTeam.ifBlank { match.teamA },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = TextPrimary
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "⚾ BOWLING: ",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        color = HawkEyeCyan
+                    )
+                    Text(
+                        text = match.bowlingTeam.ifBlank { match.teamB },
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = TextPrimary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Scoreboard Main Numbers
             Row(
@@ -239,9 +273,10 @@ fun ScoreBanner(
                             maxLines = 1
                         )
                     } else {
+                        val otherTeam = if (match.battingTeam.equals(match.teamA, ignoreCase = true)) match.teamB else match.teamA
                         Text(
-                            text = match.teamAFirstInningsScore,
-                            fontSize = 12.sp,
+                            text = "1st Innings • $otherTeam Bowling",
+                            fontSize = 11.sp,
                             color = TextMuted,
                             maxLines = 1
                         )
@@ -267,13 +302,214 @@ fun ScoreBanner(
                         text = match.statusDetail,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (match.status == "FINISHED") StadiumGold else Color(0xFF93C5FD)
+                        color = if (match.status == "FINISHED") StadiumGold else Color(0xFF93C5FD),
+                        modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = match.venue,
-                        fontSize = 10.sp,
-                        color = TextMuted
-                    )
+
+                    val isWeirdVenue = com.example.data.maps.GoogleMapsGroundingService.isWeirdVenueName(match.venue)
+                    val context = androidx.compose.ui.platform.LocalContext.current
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isWeirdVenue) Color(0xFF2A1C0E) else Color(0xFF1E293B))
+                            .clickable {
+                                if (onEditVenue != null) {
+                                    onEditVenue()
+                                } else {
+                                    com.example.data.maps.GoogleMapsGroundingService.openGoogleMapsForVenue(
+                                        context = context,
+                                        venue = match.venue,
+                                        address = match.venueAddress,
+                                        coordinates = match.venueCoordinates
+                                    )
+                                }
+                            }
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "📍",
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = if (isWeirdVenue) "⚠️ ${match.venue.take(16)}... (Edit)" else match.venue.ifBlank { "Turf" } + if (match.matchTime.isNotBlank()) " • ${match.matchTime}" else "",
+                            fontSize = 10.sp,
+                            fontWeight = if (isWeirdVenue) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isWeirdVenue) StadiumGold else TextMuted
+                        )
+                        if (onEditVenue != null) {
+                            Text(
+                                text = "✏️",
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Optional Quick Swap Batting Team button before 1st ball
+            if (match.legalBalls == 0 && match.status == "LIVE" && isOfficialScorer && onSwitchBattingTeam != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                val other = if (match.battingTeam.equals(match.teamA, ignoreCase = true)) match.teamB else match.teamA
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(StadiumGold.copy(alpha = 0.12f))
+                        .border(1.dp, StadiumGold.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .clickable { onSwitchBattingTeam() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = StadiumGold, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Toss/Batting Galat Hai? Tap to Swap Batting Team ($other Batting) 🔄",
+                            color = StadiumGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // 2nd Innings Transition UI for 1st Innings (All-Out / Overs Complete / Early Declaration)
+            if (match.currentInnings == 1 && (match.status == "LIVE" || match.status == "INNINGS_BREAK")) {
+                val isAllOutOrOversDone = match.status == "INNINGS_BREAK" || match.wickets >= 10 || match.legalBalls >= match.totalOvers * 6
+                if (isAllOutOrOversDone) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0F2E2A))
+                            .border(1.5.dp, StadiumGold, RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "🏆 1ST INNINGS COMPLETED (${if (match.wickets >= 10) "ALL OUT" else "${match.totalOvers} OVERS FINISHED"})",
+                                color = StadiumGold,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                text = "${match.battingTeam} scored ${match.score}/${match.wickets} (${match.legalBalls / 6}.${match.legalBalls % 6} ov)",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Target: ${match.score + 1} runs for ${match.bowlingTeam}",
+                                color = CricketGreen,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+
+                            if (isOfficialScorer && onStartSecondInnings != null) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Button(
+                                    onClick = onStartSecondInnings,
+                                    colors = ButtonDefaults.buttonColors(containerColor = StadiumGold, contentColor = PitchDark),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp)
+                                        .testTag("start_second_innings_official_btn")
+                                ) {
+                                    Icon(Icons.Default.SportsCricket, contentDescription = null, tint = PitchDark, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "🏏 Start 2nd Innings (${match.bowlingTeam} Batting) 🚀",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 12.5.sp
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = "🔒 Waiting for Official Match Scorer to start 2nd Innings...",
+                                    color = TextMuted,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                } else if (match.legalBalls > 0 && isOfficialScorer && onStartSecondInnings != null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF1E293B).copy(alpha = 0.6f))
+                            .border(1.dp, Color(0xFF475569), RoundedCornerShape(8.dp))
+                            .clickable { onStartSecondInnings() }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text("⏱️", fontSize = 12.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Pari Ghoshit / End 1st Innings (Target: ${match.score + 1}) ➡️",
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Match Finished Announcement Banner
+            if (match.status == "FINISHED") {
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1E293B))
+                        .border(1.5.dp, StadiumGold, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "🏆 MATCH OVER (${match.totalOvers} OVERS)",
+                            color = StadiumGold,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = match.statusDetail,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Text(
+                            text = "Scoring ab poori tarah band ho chuki hai. Naya match shuru karne ke liye '+' button par tap karein.",
+                            color = TextSecondary,
+                            fontSize = 11.5.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
 
@@ -299,39 +535,48 @@ fun ScoreBanner(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(
-                                onClick = onSwitchStriker,
-                                modifier = Modifier
-                                    .height(28.dp)
-                                    .testTag("switch_striker_btn"),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, CricketGreen.copy(alpha = 0.7f)),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CricketGreen)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.SwapHoriz,
-                                    contentDescription = "Rotate Strike",
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("Swap", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
-                            }
-                            if (onChangeBatsman != null) {
-                                Box(
+                        if (isOfficialScorer) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedButton(
+                                    onClick = onSwitchStriker,
                                     modifier = Modifier
                                         .height(28.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(CricketGreen.copy(alpha = 0.18f))
-                                        .border(1.dp, CricketGreen.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                        .clickable { onChangeBatsman() }
-                                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                                    contentAlignment = Alignment.Center
+                                        .testTag("switch_striker_btn"),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, CricketGreen.copy(alpha = 0.7f)),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CricketGreen)
                                 ) {
-                                    Text("✏️ Edit", fontSize = 10.5.sp, color = CricketGreen, fontWeight = FontWeight.Bold)
+                                    Icon(
+                                        imageVector = Icons.Default.SwapHoriz,
+                                        contentDescription = "Rotate Strike",
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Swap", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                                if (onChangeBatsman != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(28.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(CricketGreen.copy(alpha = 0.18f))
+                                            .border(1.dp, CricketGreen.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                            .clickable { onChangeBatsman() }
+                                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("✏️ Edit", fontSize = 10.5.sp, color = CricketGreen, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
+                        } else {
+                            Text(
+                                text = "👁️ Live Spectator",
+                                fontSize = 9.5.sp,
+                                color = TextMuted,
+                                fontWeight = FontWeight.Medium
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -340,7 +585,7 @@ fun ScoreBanner(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = onChangeBatsman != null) { onChangeBatsman?.invoke() },
+                            .clickable(enabled = isOfficialScorer && onChangeBatsman != null) { onChangeBatsman?.invoke() },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -374,7 +619,7 @@ fun ScoreBanner(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = onChangeBatsman != null) { onChangeBatsman?.invoke() },
+                            .clickable(enabled = isOfficialScorer && onChangeBatsman != null) { onChangeBatsman?.invoke() },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Spacer(modifier = Modifier.width(10.dp))
@@ -401,7 +646,7 @@ fun ScoreBanner(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable(enabled = onChangeBowler != null) { onChangeBowler?.invoke() }
+                        .clickable(enabled = isOfficialScorer && onChangeBowler != null) { onChangeBowler?.invoke() }
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -415,17 +660,19 @@ fun ScoreBanner(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
-                        OutlinedButton(
-                            onClick = { onChangeBowler?.invoke() },
-                            modifier = Modifier
-                                .height(28.dp)
-                                .testTag("change_bowler_btn"),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, StadiumGold.copy(alpha = 0.8f)),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = StadiumGold)
-                        ) {
-                            Text("🎳 Change", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                        if (isOfficialScorer) {
+                            OutlinedButton(
+                                onClick = { onChangeBowler?.invoke() },
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .testTag("change_bowler_btn"),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, StadiumGold.copy(alpha = 0.8f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = StadiumGold)
+                            ) {
+                                Text("🎳 Change", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -509,3 +756,25 @@ fun RecentBallPill(ball: BallEventEntity) {
         )
     }
 }
+
+@Composable
+fun ScoreBannerPulsingDot(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "banner_pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+    Box(
+        modifier = modifier
+            .size(7.dp)
+            .graphicsLayer { alpha = pulseAlpha }
+            .clip(CircleShape)
+            .background(DrsOutRed)
+    )
+}
+

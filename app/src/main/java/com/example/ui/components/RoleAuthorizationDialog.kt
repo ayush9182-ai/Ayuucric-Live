@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Lock
@@ -43,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -228,20 +230,88 @@ fun RoleAuthorizationDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Admin Approval Required (सुरक्षित अनुमति)",
+                                text = "Official Match Role Unlock",
                                 color = TextPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                         Text(
-                            text = "Cheating aur unauthenticated scoring se bachne ke liye naye users Viewer role mein rehte hain. Official banne ke liye Admin Ayush se permission request bhejiye.",
+                            text = "Official roles (Scorer, Umpires, DRS) unlock karne ke liye Owner PIN darj karein ya Admin se request bhejein.",
                             color = TextSecondary,
                             fontSize = 11.sp,
                             lineHeight = 15.sp
                         )
 
-                        // Direct Request Form to Admin Ayush
+                        // Direct PIN Unlock Section (Secret Official PIN)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF0F172A))
+                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(10.dp))
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = StadiumGold,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Enter Official Security PIN:",
+                                    color = StadiumGold,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            OutlinedTextField(
+                                value = enteredPin,
+                                onValueChange = { if (it.length <= 6) enteredPin = it },
+                                placeholder = { Text("Enter 6-digit Secret PIN", fontSize = 12.sp, color = TextMuted) },
+                                singleLine = true,
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = CricketGreen,
+                                    unfocusedBorderColor = Color(0xFF334155),
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("role_pin_input")
+                            )
+                            Text(
+                                text = "🔒 Yeh role sirf authorized match officials aur owner ke liye protected hai.",
+                                color = TextMuted,
+                                fontSize = 10.sp
+                            )
+                            Button(
+                                onClick = {
+                                    if (enteredPin.trim().isBlank()) {
+                                        errorMessage = "Pehle Security PIN enter karein!"
+                                        return@Button
+                                    }
+                                    val success = onSelectRole(selectedRole, enteredPin)
+                                    if (success) {
+                                        onDismiss()
+                                    } else {
+                                        errorMessage = "Galat PIN! Sirf sahi PIN se hi role unlock hoga."
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = CricketGreen),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("role_unlock_button")
+                            ) {
+                                Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = PitchDark, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Unlock Role with PIN (पिन से अनलॉक करें)", color = PitchDark, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+
+                        // Direct Request Form to Admin Ayush as Alternative
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -252,8 +322,8 @@ fun RoleAuthorizationDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Send Role Request to Admin Ayush:",
-                                color = StadiumGold,
+                                text = "Ya Admin Ayush se permission request bhejiye:",
+                                color = TextSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -347,11 +417,15 @@ fun RoleAuthorizationDialog(
                         onSelectRole(selectedRole, "")
                         onDismiss()
                     } else {
+                        if (enteredPin.trim().isBlank()) {
+                            errorMessage = "Kripya 6-digit Security PIN darj karein ya Admin se request bhejiye."
+                            return@Button
+                        }
                         val success = onSelectRole(selectedRole, enteredPin)
                         if (success) {
                             onDismiss()
                         } else {
-                            errorMessage = "Authorization required from Admin or Match Official. Please submit a request above."
+                            errorMessage = "Galat PIN! Sirf sahi PIN se hi role unlock ho sakta hai."
                         }
                     }
                 },
